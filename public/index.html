@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novel2Script AI — 小说转剧本智能工作站</title>
+<style>
+:root {
+  --bg-root: #0B0B0F;
+  --bg-card: #15161C;
+  --bg-elevated: #1C1D24;
+  --bg-hover: #22232B;
+  --gold: #D4AF37;
+  --gold-dim: rgba(212,175,55,0.15);
+  --gold-hover: #E0BF4A;
+  --text: #F5F5F5;
+  --text-secondary: #8B8D98;
+  --text-muted: #5C5E68;
+  --border: rgba(255,255,255,0.08);
+  --border-active: rgba(255,255,255,0.14);
+  --red: #E5484D; --red-bg: rgba(229,72,77,0.12);
+  --green: #30C964; --green-bg: rgba(48,201,100,0.12);
+  --blue: #3B8CFF; --blue-bg: rgba(59,140,255,0.12);
+  --purple: #8B5CF6;
+  --radius: 10px; --radius-sm: 6px; --radius-lg: 16px;
+  --font: "Inter","SF Pro Display","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  --mono: "JetBrains Mono","Cascadia Code","Fira Code","Consolas",monospace;
+  --sidebar-w: 220px;
+  --panel-header-h: 64px;
+  --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
+  --transition-slow: 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;font-family:var(--font);background:var(--bg-root);color:var(--text);line-height:1.6;overflow:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.18)}
+.app{display:flex;height:100vh}
+
+/* ═══════════ SIDEBAR ═══════════════════════ */
+.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--bg-card);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;flex-shrink:0}
+.sidebar-brand{padding:20px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.sidebar-logo{width:32px;height:32px;background:linear-gradient(135deg,var(--gold),#B8942E);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0B0B0F}
+.sidebar-brand-text{font-size:15px;font-weight:700;letter-spacing:-0.3px;line-height:1.2}
+.sidebar-brand-sub{font-size:10px;color:var(--text-muted);font-weight:400;letter-spacing:0.3px}
+.sidebar-nav{flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:2px}
+.sidebar-section{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:1px;padding:16px 8px 6px}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;transition:all var(--transition);text-decoration:none;border:none;background:none;width:100%;text-align:left;font-family:var(--font)}
+.sidebar-item:hover{background:var(--bg-hover);color:var(--text)}
+.sidebar-item.active{background:var(--gold-dim);color:var(--gold)}
+.sidebar-item .icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.sidebar-item .badge{margin-left:auto;font-size:10px;padding:1px 7px;border-radius:10px;background:var(--gold-dim);color:var(--gold);font-weight:600}
+.sidebar-footer{padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sidebar-avatar{width:30px;height:30px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid var(--border)}
+.sidebar-user{font-size:12px;font-weight:500}
+.sidebar-user-sub{font-size:10px;color:var(--text-muted)}
+
+/* ═══════════ MAIN ═══════════════════════════ */
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.page{display:none;flex:1;overflow:hidden}
+.page.active{display:flex;flex-direction:column}
+
+/* ═══════════ DASHBOARD ═══════════════════════ */
+.dashboard{overflow-y:auto;padding:0}
+.dash-hero{padding:80px 60px 60px;text-align:center;animation:fadeUp 0.6s var(--transition-slow)}
+.dash-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;background:var(--gold-dim);border:1px solid rgba(212,175,55,0.25);border-radius:20px;font-size:12px;color:var(--gold);margin-bottom:24px;font-weight:500}
+.dash-hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 2s ease infinite}
+.dash-title{font-size:48px;font-weight:700;letter-spacing:-1.5px;line-height:1.1;margin-bottom:16px;background:linear-gradient(180deg,#FFFFFF 0%,#A0A0A0 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.dash-subtitle{font-size:17px;color:var(--text-secondary);max-width:500px;margin:0 auto 36px;line-height:1.7;font-weight:400}
+.dash-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.dash-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 60px 60px;max-width:1100px;margin:0 auto;animation:fadeUp 0.6s var(--transition-slow) 0.15s both}
+.dash-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px 24px;transition:all var(--transition);cursor:default;text-align:center}
+.dash-card:hover{border-color:var(--border-active);transform:translateY(-2px)}
+.dash-card-icon{width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 14px}
+.dash-card-icon.c1{background:rgba(212,175,55,0.12);color:var(--gold)}
+.dash-card-icon.c2{background:rgba(59,140,255,0.12);color:var(--blue)}
+.dash-card-icon.c3{background:rgba(48,201,100,0.12);color:var(--green)}
+.dash-card-icon.c4{background:rgba(139,92,246,0.12);color:var(--purple)}
+.dash-card-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.dash-card-desc{font-size:12px;color:var(--text-muted);line-height:1.6}
+
+/* ═══════════ WORKSPACE ═══════════════════════ */
+.workspace{display:flex;flex:1;overflow:hidden}
+.ws-panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+.ws-panel:last-child{border-right:none}
+.ws-panel-left{flex:3;min-width:280px}
+.ws-panel-mid{flex:3;min-width:280px}
+.ws-panel-right{flex:4;min-width:340px}
+
+/* Panel Header — 64px unified */
+.ws-panel-head{display:flex;align-items:center;gap:12px;padding:0 20px;height:var(--panel-header-h);background:var(--bg-card);border-bottom:1px solid var(--border);flex-shrink:0}
+.ws-panel-head .head-icon{font-size:18px;flex-shrink:0}
+.ws-panel-head .head-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ws-panel-head .head-dot.gold{background:var(--gold)}
+.ws-panel-head .head-dot.blue{background:var(--blue)}
+.ws-panel-head .head-dot.green{background:var(--green)}
+.ws-panel-head .head-title{font-size:14px;font-weight:700;color:var(--text);letter-spacing:0.3px}
+.ws-panel-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+
+/* ═══════════ ACTION BAR ═══════════════════════ */
+.action-bar{display:flex;gap:8px;padding:0 16px 10px;flex-shrink:0;flex-wrap:wrap}
+.action-bar .btn{font-size:13px;padding:8px 16px}
+
+/* ═══════════ BUTTONS ═══════════════════════ */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text);transition:all var(--transition);white-space:nowrap;text-decoration:none}
+.btn:hover{background:var(--bg-hover);border-color:var(--border-active)}
+.btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
+.btn-primary{background:var(--gold);color:#0B0B0F;border-color:var(--gold);font-weight:600}
+.btn-primary:hover{background:var(--gold-hover);border-color:var(--gold-hover)}
+.btn-ghost{background:transparent;border-color:transparent}
+.btn-ghost:hover{background:var(--bg-hover)}
+.btn-lg{padding:12px 28px;font-size:15px;border-radius:var(--radius)}
+.btn-prominent{padding:10px 22px;font-size:15px;font-weight:600}
+
+/* ═══════════ FORMS ═══════════════════════ */
+input,select,textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-elevated);color:var(--text);font-family:var(--font);font-size:13px;transition:border-color var(--transition);outline:none;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-dim)}
+textarea{line-height:1.7;resize:none}
+.form-row{display:flex;gap:10px}.form-row>*{flex:1}
+.form-label{font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:0.6px;margin-bottom:4px;display:block}
+
+/* ═══════════ CHAPTERS ═══════════════════════ */
+.chapter-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);cursor:pointer;transition:all var(--transition);border:1px solid transparent;font-size:14px}
+.chapter-item:hover{background:var(--bg-hover)}
+.chapter-item.active{background:var(--gold-dim);border-color:rgba(212,175,55,0.25)}
+.chapter-num{font-size:12px;font-weight:700;color:var(--gold);min-width:32px}
+.chapter-title{font-weight:500;font-size:14px}
+.chapter-words{font-size:11px;color:var(--text-muted);margin-left:auto}
+.chapter-current{padding:10px 14px;background:var(--bg-elevated);border-radius:var(--radius);border:1px solid var(--border);font-size:13px;line-height:1.8;color:var(--text-secondary);overflow-y:auto;flex:1;min-height:60px}
+
+/* ═══════════ TABS ═══════════════════════ */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:10px 6px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--text-muted);font-family:var(--font);border-bottom:2px solid transparent;transition:all var(--transition);display:flex;align-items:center;justify-content:center;gap:4px}
+.tab:hover{color:var(--text-secondary)}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.tab-content,.rtab-content{display:none;flex:1;overflow-y:auto}
+.tab-content.active,.rtab-content.active{display:flex;flex-direction:column;gap:8px}
+
+/* ═══════════ CARDS ═══════════════════════ */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;font-size:14px;animation:fadeUp 0.3s var(--transition-slow)}
+.card-title{font-weight:600;font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.card-sub{color:var(--text-muted);font-size:13px}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600}
+.badge-gold{background:var(--gold-dim);color:var(--gold)}
+.badge-blue{background:var(--blue-bg);color:var(--blue)}
+.badge-green{background:var(--green-bg);color:var(--green)}
+.badge-red{background:var(--red-bg);color:var(--red)}
+.badge-purple{background:rgba(139,92,246,0.12);color:var(--purple)}
+.badge-muted{background:rgba(255,255,255,0.06);color:var(--text-muted)}
+
+/* ═══════════ CHAR GRAPH ═══════════════════════ */
+.char-graph{width:100%;height:260px;background:var(--bg-elevated);border-radius:var(--radius);border:1px solid var(--border);position:relative;overflow:hidden}
+.char-graph svg{width:100%;height:100%}
+.char-node{fill:var(--bg-card);stroke:var(--border-active);stroke-width:1}
+.char-node-text{fill:var(--text);font-size:11px;font-weight:500;text-anchor:middle}
+.char-edge{stroke:rgba(255,255,255,0.12);stroke-width:1.5;fill:none}
+.char-edge.gold{stroke:var(--gold);stroke-width:2;stroke-dasharray:4 3}
+.char-edge-label{fill:var(--text-muted);font-size:9px;text-anchor:middle}
+
+/* ═══════════ TIMELINE ═══════════════════════ */
+.timeline{display:flex;align-items:flex-start;gap:0;overflow-x:auto;padding:16px 8px;position:relative}
+.timeline::before{content:"";position:absolute;top:20px;left:30px;right:30px;height:2px;background:var(--border)}
+.timeline-node{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:90px;flex-shrink:0;position:relative;z-index:1}
+.timeline-dot{width:12px;height:12px;border-radius:50%;background:var(--bg-card);border:2px solid var(--border-active);flex-shrink:0}
+.timeline-dot.gold{background:var(--gold);border-color:var(--gold)}
+.timeline-dot.dim{background:var(--bg-elevated);border-color:var(--border)}
+.timeline-label{font-size:10px;color:var(--text-muted);text-align:center;line-height:1.4;max-width:80px}
+.timeline-label strong{display:block;color:var(--text);font-size:11px;font-weight:600}
+
+/* ═══════════ AI THINKING ═══════════════════════ */
+.ai-thinking{padding:12px;background:var(--bg-elevated);border-radius:var(--radius);border:1px solid var(--border)}
+.ai-step{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;color:var(--text-secondary)}
+.ai-step.done{color:var(--green)}
+.ai-step.done .ai-dot{background:var(--green);border-color:var(--green)}
+.ai-step.active{color:var(--text)}
+.ai-step.active .ai-dot{background:var(--gold);border-color:var(--gold);animation:pulse 1.5s ease infinite}
+.ai-step.pending{color:var(--text-muted)}
+.ai-dot{width:8px;height:8px;border-radius:50%;border:2px solid var(--border-active);flex-shrink:0}
+
+/* ═══════════ SCREENPLAY ═══════════════════════ */
+.scene-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;animation:fadeUp 0.4s var(--transition-slow)}
+.scene-slug{font-weight:700;font-size:16px;color:var(--text);margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.scene-action{font-size:15px;color:var(--text-secondary);line-height:1.8;padding:6px 0}
+.scene-dialogue{padding:12px 0 6px 24px;font-size:16px}
+.scene-dialogue-char{font-weight:600;color:var(--text);font-size:14px;letter-spacing:0.5px;margin-bottom:4px}
+.scene-dialogue-text{color:var(--text-secondary);line-height:1.7;font-size:15px}
+.scene-emotion{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--gold);margin-top:4px}
+
+/* ═══════════ YAML ═══════════════════════ */
+.yaml-viewer{flex:1;font-family:var(--mono);font-size:14px;line-height:1.7;padding:18px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;white-space:pre-wrap;word-break:break-word;tab-size:2;color:var(--text-secondary);min-height:200px}
+.yaml-viewer:empty::after{content:"点击「生成剧本」开始改编...";color:var(--text-muted);font-family:var(--font);font-style:italic;font-size:14px}
+.yk{color:#6BA3F5}.ys{color:#30C964}.yn{color:#E8A860}.yb{color:#8B5CF6}.yc{color:#5C5E68;font-style:italic}.yl{color:#D4AF37}
+
+/* ═══════════ PROGRESS ═══════════════════════ */
+.progress-wrap{padding:8px 0}
+.progress-bar{height:3px;background:var(--bg-elevated);border-radius:2px;overflow:hidden;margin-bottom:8px}
+.progress-fill{height:100%;background:var(--gold);border-radius:2px;width:0;transition:width 0.3s}
+.progress-fill.indet{width:30%;animation:indet 1.5s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+.progress-txt{font-size:14px;color:var(--text-muted)}
+
+/* ═══════════ STATS ═══════════════════════ */
+.stats{display:flex;gap:12px;flex-wrap:wrap;padding:0 16px 6px;flex-shrink:0}
+.stat{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:12px;font-size:14px}
+.stat-val{font-weight:700;font-size:20px;color:var(--gold)}
+.stat-lbl{color:var(--text-muted);font-size:13px;letter-spacing:0.5px}
+
+/* ═══════════ DIALOGUE TABLE ═══════════════════════ */
+.dial-table{width:100%;border-collapse:collapse;font-size:14px}
+.dial-table th{text-align:left;padding:10px 12px;background:var(--bg-elevated);color:var(--text-muted);font-size:13px;letter-spacing:0.5px;font-weight:600;position:sticky;top:0;z-index:1}
+.dial-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+.dial-table tr:hover td{background:var(--bg-hover)}
+.dial-orig{color:var(--text-muted);text-decoration:line-through;text-decoration-color:rgba(229,72,77,0.4);font-size:13px}
+.dial-opt{color:var(--text);font-size:14px}
+.dial-imp{color:var(--green);font-size:12px;max-width:120px}
+
+/* ═══════════ EMOTION ═══════════════════════ */
+.emo-grid{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;font-size:14px}
+.emo-grid>*{padding:10px 12px;background:var(--bg-card)}
+.emo-hdr{background:var(--bg-elevated)!important;font-weight:600;font-size:13px;color:var(--text-muted)}
+.emo-tag{display:inline-block;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:500;background:var(--purple);color:#fff;opacity:0.8}
+
+/* ═══════════ METADATA ═══════════════════════ */
+.meta-dl{display:grid;grid-template-columns:auto 1fr;gap:8px 24px;font-size:15px}
+.meta-dl dt{color:var(--text-muted);font-size:13px;letter-spacing:0.6px}
+.meta-dl dd{color:var(--text);font-weight:500}
+
+/* ═══════════ EMPTY ═══════════════════════ */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);text-align:center;padding:40px}
+.empty-icon{font-size:48px;margin-bottom:16px;opacity:0.5}
+.empty-title{font-size:16px;font-weight:600;color:var(--text-secondary);margin-bottom:8px}
+.empty-desc{font-size:14px;line-height:1.7;max-width:280px}
+
+/* ═══════════ STORYBOARD WORKSPACE ═══════════════════════ */
+.sb-workspace{display:flex;flex-direction:column;flex:1;overflow:hidden}
+.sb-header{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:var(--panel-header-h);background:var(--bg-card);border-bottom:1px solid var(--border);flex-shrink:0}
+.sb-header-left{display:flex;align-items:center;gap:12px}
+.sb-header-icon{font-size:18px}
+.sb-header-title{font-size:14px;font-weight:700}
+.sb-header-stats{display:flex;gap:16px;font-size:13px;color:var(--text-secondary)}
+.sb-header-stats strong{color:var(--text);font-size:16px}
+.sb-header-actions{display:flex;gap:8px}
+.sb-body{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:24px}
+.sb-scene-group{}
+.sb-scene-label{font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sb-scene-label::after{content:"";flex:1;height:1px;background:var(--border)}
+.sb-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.sb-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:all var(--transition)}
+.sb-card:hover{border-color:var(--border-active);transform:translateY(-2px)}
+.sb-card-preview{height:140px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:44px;border-bottom:1px solid var(--border);position:relative}
+.sb-card-preview .shot-num{position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.8);color:var(--gold);font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.sb-card-body{padding:16px}
+.sb-card-row{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.sb-card-desc{font-size:14px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px}
+.sb-card-prompts{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.sb-prompt{font-size:11px;font-family:var(--mono);color:var(--text-muted);background:var(--bg-elevated);padding:6px 10px;border-radius:var(--radius-sm);line-height:1.5;word-break:break-all}
+.sb-prompt-label{font-size:9px;font-weight:600;color:var(--gold);margin-bottom:2px;letter-spacing:0.5px}
+.sb-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;color:var(--text-muted)}
+.sb-empty-icon{font-size:56px;margin-bottom:16px;opacity:0.4}
+.sb-empty-title{font-size:18px;font-weight:600;color:var(--text-secondary);margin-bottom:8px}
+.sb-empty-desc{font-size:14px;line-height:1.7;text-align:center;max-width:400px}
+
+/* ═══════════ TOAST ═══════════════════════ */
+.toast-ctr{position:fixed;top:16px;right:16px;z-index:999;display:flex;flex-direction:column;gap:6px}
+.toast{padding:10px 18px;border-radius:var(--radius);font-size:12px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,0.5);animation:slideIn .3s ease;max-width:340px}
+.toast.ok{background:var(--green-bg);border:1px solid rgba(48,201,100,0.3);color:var(--green)}
+.toast.err{background:var(--red-bg);border:1px solid rgba(229,72,77,0.3);color:var(--red)}
+.toast.inf{background:var(--blue-bg);border:1px solid rgba(59,140,255,0.3);color:var(--blue)}
+
+/* ═══════════ ANIMATIONS ═══════════════════════ */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skeleton{background:linear-gradient(90deg,var(--bg-elevated) 25%,var(--bg-hover) 50%,var(--bg-elevated) 75%);background-size:200% 100%;animation:shimmer 1.5s ease infinite;border-radius:var(--radius-sm)}
+
+@media(max-width:1100px){.dash-cards{grid-template-columns:repeat(2,1fr);padding:20px 30px 40px}.dash-title{font-size:36px}.dash-hero{padding:50px 30px 40px}}
+@media(max-width:768px){.sidebar{display:none}.workspace{flex-direction:column}.ws-panel{flex:1!important;min-width:0!important;max-height:33%}.dash-cards{grid-template-columns:1fr;padding:16px}.dash-title{font-size:28px}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ═══════════ SIDEBAR ═══════════ -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-logo">N2</div>
+    <div>
+      <div class="sidebar-brand-text">Novel2Script</div>
+      <div class="sidebar-brand-sub">AI 编剧工作站</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="sidebar-section">主菜单</div>
+    <button class="sidebar-item active" data-page="dashboard"><span class="icon">◻</span> 首页</button>
+    <button class="sidebar-item" data-page="workspace"><span class="icon">▶</span> 工作台</button>
+    <div class="sidebar-section">项目 <span style="font-weight:400;font-size:10px;cursor:pointer;color:var(--gold)" onclick="saveProject()" title="保存当前项目">💾 保存</span></div>
+    <div id="projectList" style="padding:0 4px;display:flex;flex-direction:column;gap:1px;max-height:160px;overflow-y:auto">
+      <div style="font-size:11px;color:var(--text-muted);padding:6px 8px">暂无保存的项目</div>
+    </div>
+    <div class="sidebar-section">创作</div>
+    <button class="sidebar-item" data-page="workspace"><span class="icon">📜</span> 剧本工作台<span class="badge" id="scriptCount" style="display:none">0</span></button>
+    <button class="sidebar-item" data-page="analysis"><span class="icon">🔍</span> 剧情分析</button>
+    <button class="sidebar-item" onclick="openStoryboard()"><span class="icon">🎬</span> 分镜工作台</button>
+    <div class="sidebar-section">导出</div>
+    <button class="sidebar-item" onclick="doDownload()"><span class="icon">↓</span> YAML 导出</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-avatar">编</div>
+    <div><div class="sidebar-user">编剧用户</div><div class="sidebar-user-sub">免费版</div></div>
+  </div>
+</aside>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<main class="main" id="mainContent">
+
+<!-- ═══════ DASHBOARD ═══════════ -->
+<div class="page active" id="page-dashboard">
+  <div class="dashboard">
+    <div class="dash-hero">
+      <div class="dash-hero-badge"><span class="dot"></span> AI 驱动剧本创作</div>
+      <h1 class="dash-title">小说一键转剧本<br>AI 编剧工作站</h1>
+      <p class="dash-subtitle">上传你的小说，AI 自动分析人物、场景、冲突，生成专业结构化 YAML 剧本。从章节分析到剧本导出，一站式专业创作体验。</p>
+      <div class="dash-actions">
+        <button class="btn btn-primary btn-lg" onclick="switchPage('workspace')">📂 上传小说</button>
+        <button class="btn btn-lg" onclick="loadDemo();switchPage('workspace')">🎬 体验示例</button>
+      </div>
+    </div>
+    <div class="dash-cards">
+      <div class="dash-card"><div class="dash-card-icon c1">🔍</div><div class="dash-card-title">角色分析</div><div class="dash-card-desc">AI 自动提取人物、性格特征、人物关系，构建完整角色关系图谱。</div></div>
+      <div class="dash-card"><div class="dash-card-icon c2">🎬</div><div class="dash-card-title">场景识别</div><div class="dash-card-desc">自动识别场景边界、地点信息、时间节点，精确划分剧本场景。</div></div>
+      <div class="dash-card"><div class="dash-card-icon c3">📜</div><div class="dash-card-title">剧本生成</div><div class="dash-card-desc">将叙事文字转化为专业剧本格式，包含动作节拍、对白和情绪标注。</div></div>
+      <div class="dash-card"><div class="dash-card-icon c4">💾</div><div class="dash-card-title">YAML 导出</div><div class="dash-card-desc">结构化 YAML 输出，支持版本管理、二次编辑及下游管线无缝对接。</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ ANALYSIS PAGE ═══════════ -->
+<div class="page" id="page-analysis">
+  <div style="display:flex;flex-direction:column;flex:1;overflow-y:auto;padding:24px 32px;gap:20px">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:20px;font-weight:700">剧情分析</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Story Analysis — 角色、场景、冲突全景视图</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="btnAnalyzePage" onclick="runAnalyzeForPage()">🔍 AI 分析剧情</button>
+        <button class="btn" onclick="switchPage('workspace')">→ 进入剧本工作台</button>
+      </div>
+    </div>
+    <!-- Stats -->
+    <div class="stats" id="analysisStats2" style="display:none">
+      <div class="stat"><div class="stat-val" id="asChars">-</div><div class="stat-lbl">角色</div></div>
+      <div class="stat"><div class="stat-val" id="asLocs">-</div><div class="stat-lbl">地点</div></div>
+      <div class="stat"><div class="stat-val" id="asConfs">-</div><div class="stat-lbl">冲突</div></div>
+    </div>
+    <!-- Main content: Graph + Cards side by side -->
+    <div style="display:flex;gap:20px;flex:1;min-height:0">
+      <!-- Left: Character Graph (large) -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px">角色关系图谱</div>
+        <div class="char-graph" id="charGraphPage" style="height:100%;min-height:300px">
+          <svg viewBox="0 0 400 300" id="graphSvgPage" style="width:100%;height:100%"></svg>
+        </div>
+        <!-- Timeline -->
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px">故事时间轴</div>
+        <div class="timeline" id="timelinePage"></div>
+      </div>
+      <!-- Right: Cards column -->
+      <div style="width:380px;flex-shrink:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px">角色详情</div>
+        <div id="charCardsPage"><div class="empty" style="padding:40px"><div class="empty-icon">👤</div><div class="empty-title">点击「AI 分析剧情」</div><div class="empty-desc">AI 将自动提取小说中的人物、地点与冲突。</div></div></div>
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px">地点列表</div>
+        <div id="locCardsPage"></div>
+        <div style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px">冲突分析</div>
+        <div id="confCardsPage"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ WORKSPACE ═══════════ -->
+<div class="page" id="page-workspace">
+  <div class="workspace">
+
+    <!-- LEFT: 小说内容 -->
+    <div class="ws-panel ws-panel-left">
+      <div class="ws-panel-head">
+        <span class="head-dot gold"></span>
+        <span class="head-title">小说内容</span>
+      </div>
+      <div class="ws-panel-body">
+        <details style="font-size:12px">
+          <summary style="cursor:pointer;color:var(--text-muted);padding:4px 0">项目设置</summary>
+          <div style="padding:8px;background:var(--bg-card);border-radius:var(--radius);border:1px solid var(--border);margin-top:4px;display:flex;flex-direction:column;gap:6px">
+            <div class="form-row">
+              <div><label class="form-label">剧本标题</label><input id="mtitle" placeholder="请输入剧本标题"></div>
+              <div><label class="form-label">格式</label><select id="mformat"><option value="film">电影</option><option value="tv_series" selected>电视剧</option><option value="stage_play">舞台剧</option><option value="web_series">网络短剧</option></select></div>
+            </div>
+            <div class="form-row">
+              <div><label class="form-label">原著</label><input id="mnovel" placeholder="原著小说名"></div>
+              <div><label class="form-label">作者</label><input id="mauthor" placeholder="原著作者名"></div>
+            </div>
+          </div>
+        </details>
+        <!-- Paste area -->
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;font-weight:600;color:var(--text-muted);letter-spacing:0.5px">Ctrl+V 粘贴小说文本（3 章以上）</span>
+          <span style="font-size:10px;color:var(--text-muted)" id="wordCnt">0 字</span>
+        </div>
+        <textarea id="novelIn" placeholder="在此直接粘贴小说文本...支持格式：第X章 / Chapter X / 第X回" style="height:120px;min-height:120px;font-size:13px;line-height:1.7;font-family:var(--font);resize:vertical;flex-shrink:0"></textarea>
+        <div style="display:flex;gap:6px">
+          <button class="btn" onclick="detectChapters()" style="flex:1">🔍 检测章节</button>
+          <label class="btn" style="cursor:pointer;flex:1">📂 上传文件<input type="file" accept=".txt,.md" hidden onchange="uploadFile(event)"></label>
+          <button class="btn" onclick="loadDemo()">📥 示例</button>
+          <button class="btn" onclick="handleClearConfirm()" title="清空">🗑</button>
+        </div>
+        <!-- Chapters -->
+        <details open style="font-size:12px;flex-shrink:0">
+          <summary style="cursor:pointer;color:var(--text-muted);font-weight:600;font-size:10px;letter-spacing:0.8px;padding:2px 0">章节列表</summary>
+          <div id="chapList" style="max-height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">
+            <div class="empty" style="padding:16px"><div class="empty-desc">粘贴文本后点击「检测章节」</div></div>
+          </div>
+        </details>
+        <div class="chapter-current" id="chapContent" style="flex:1;min-height:60px;max-height:none"><span style="color:var(--text-muted)">点击章节可预览内容...</span></div>
+      </div>
+    </div>
+
+    <!-- CENTER: AI 分析 -->
+    <div class="ws-panel ws-panel-mid">
+      <div class="ws-panel-head">
+        <span class="head-dot blue"></span>
+        <span class="head-title">AI 分析</span>
+      </div>
+      <div class="ws-panel-body">
+        <button class="btn btn-primary btn-prominent" id="btnAnalyze" onclick="runAnalyze()" style="width:100%">🔍 分析剧情</button>
+        <div class="tabs" id="midTabs">
+          <button class="tab active" data-tab="tab-think">⟳ 分析过程</button>
+          <button class="tab" data-tab="tab-char">👤 人物</button>
+          <button class="tab" data-tab="tab-loc">📍 地点</button>
+          <button class="tab" data-tab="tab-conf">⚡ 冲突</button>
+        </div>
+        <div class="tab-content active" id="tab-think">
+          <div class="ai-thinking" id="aiThink">
+            <div class="ai-step pending" id="aiStep1"><span class="ai-dot"></span> 角色提取</div>
+            <div class="ai-step pending" id="aiStep2"><span class="ai-dot"></span> 关系图谱构建</div>
+            <div class="ai-step pending" id="aiStep3"><span class="ai-dot"></span> 场景识别</div>
+            <div class="ai-step pending" id="aiStep4"><span class="ai-dot"></span> 情节分析</div>
+            <div class="ai-step pending" id="aiStep5"><span class="ai-dot"></span> 剧本生成</div>
+          </div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px;margin-top:8px">角色关系图</div>
+          <div class="char-graph" id="charGraph"><svg viewBox="0 0 400 240" id="graphSvg"></svg></div>
+          <div style="font-size:10px;font-weight:600;color:var(--text-muted);letter-spacing:0.8px;margin-top:4px">故事时间轴</div>
+          <div class="timeline" id="timeline"></div>
+        </div>
+        <div class="tab-content" id="tab-char">
+          <div class="empty" id="emptyChar"><div class="empty-icon">👤</div><div class="empty-title">人物分析</div><div class="empty-desc">点击「分析剧情」，AI 将自动提取人物及其特征。</div></div>
+          <div id="charCards"></div>
+        </div>
+        <div class="tab-content" id="tab-loc">
+          <div class="empty" id="emptyLoc"><div class="empty-icon">📍</div><div class="empty-title">地点分析</div><div class="empty-desc">AI 将识别小说中的场景地点与内外景类型。</div></div>
+          <div id="locCards"></div>
+        </div>
+        <div class="tab-content" id="tab-conf">
+          <div class="empty" id="emptyConf"><div class="empty-icon">⚡</div><div class="empty-title">冲突分析</div><div class="empty-desc">AI 识别核心冲突与次要冲突，标注强度与类型。</div></div>
+          <div id="confCards"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: 剧本生成 -->
+    <div class="ws-panel ws-panel-right">
+      <div class="ws-panel-head">
+        <span class="head-dot green"></span>
+        <span class="head-title">剧本生成</span>
+      </div>
+      <!-- Progress -->
+      <div class="progress-wrap" id="progWrap" style="display:none;padding:6px 16px">
+        <div class="progress-bar"><div class="progress-fill indet" id="progBar"></div></div>
+        <div class="progress-txt" id="progTxt">就绪</div>
+      </div>
+      <!-- Stats -->
+      <div class="stats" id="statsRow" style="display:none">
+        <div class="stat"><div class="stat-val" id="sChapters">-</div><div class="stat-lbl">章节</div></div>
+        <div class="stat"><div class="stat-val" id="sScenes">-</div><div class="stat-lbl">场景</div></div>
+        <div class="stat"><div class="stat-val" id="sChars">-</div><div class="stat-lbl">角色</div></div>
+        <div class="stat"><div class="stat-val" id="sConflicts">-</div><div class="stat-lbl">冲突</div></div>
+      </div>
+      <!-- Global Action Bar -->
+      <div class="action-bar">
+        <button class="btn btn-primary" id="btnGen" onclick="runConvert()">🎬 生成剧本</button>
+        <button class="btn" id="btnOptDia" onclick="runOptimizeDialogues()" disabled>✨ 优化对白</button>
+        <button class="btn" id="btnOptEmo" onclick="runAnalyzeEmotions()" disabled>🎭 情绪分析</button>
+        <button class="btn" id="btnGenSB" onclick="openStoryboard()" disabled>🎬 生成分镜</button>
+      </div>
+      <!-- Tabs (no 分镜) -->
+      <div class="tabs" id="rightTabs">
+        <button class="tab active" data-tab="rtab-yaml">{ } YAML</button>
+        <button class="tab" data-tab="rtab-dial">💬 对白</button>
+        <button class="tab" data-tab="rtab-emo">🎭 情绪</button>
+        <button class="tab" data-tab="rtab-meta">ℹ 元数据</button>
+      </div>
+      <!-- Tab Contents -->
+      <div class="rtab-content active" id="rtab-yaml">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;flex-shrink:0">
+          <span id="yamlFileSize" style="font-size:11px;color:var(--text-muted)"></span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm" id="btnCopyYaml" onclick="doCopy()" disabled>📋 复制</button>
+            <button class="btn btn-sm" id="btnDownloadYaml" onclick="doDownload()" disabled>💾 下载 YAML</button>
+          </div>
+        </div>
+        <div class="yaml-viewer" id="yamlOut"></div>
+      </div>
+      <div class="rtab-content" id="rtab-dial">
+        <div style="display:flex;justify-content:flex-end;padding-bottom:4px;flex-shrink:0">
+          <button class="btn btn-sm" id="btnExportDial" onclick="exportDialogues()" disabled style="display:none">📋 导出对白 CSV</button>
+        </div>
+        <div class="empty" id="emptyDial"><div class="empty-icon">💬</div><div class="empty-title">对白优化</div><div class="empty-desc">生成剧本后，点击「优化对白」获取逐句优化建议。</div></div>
+        <div style="overflow-x:auto" id="dialWrap"></div>
+      </div>
+      <div class="rtab-content" id="rtab-emo">
+        <div class="empty" id="emptyEmo"><div class="empty-icon">🎭</div><div class="empty-title">情绪分析</div><div class="empty-desc">生成剧本后，点击「情绪分析」获取角色情绪矩阵与表演指导。</div></div>
+        <div id="emoWrap"></div><div id="perfWrap" style="font-size:12px"></div>
+      </div>
+      <div class="rtab-content" id="rtab-meta">
+        <div class="empty" id="emptyMeta"><div class="empty-icon">ℹ</div><div class="empty-title">元数据</div><div class="empty-desc">剧本生成后自动显示溯源信息与修订记录。</div></div>
+        <dl class="meta-dl" id="metaGrid"></dl>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════ STORYBOARD WORKSPACE ═══════ -->
+<div class="page" id="page-storyboard">
+  <div class="sb-workspace">
+    <div class="sb-header">
+      <div class="sb-header-left">
+        <span class="sb-header-icon">🎬</span>
+        <span class="sb-header-title">分镜工作台</span>
+        <span style="color:var(--text-muted);font-size:13px">Storyboard Workspace</span>
+      </div>
+      <div class="sb-header-stats">
+        <span>场景：<strong id="sbSceneCount">0</strong></span>
+        <span>镜头：<strong id="sbShotCount">0</strong></span>
+      </div>
+      <div class="sb-header-actions">
+        <button class="btn btn-sm" onclick="switchPage('workspace')">← 返回工作台</button>
+        <button class="btn btn-sm" id="btnSBExport" onclick="exportStoryboard()">💾 导出分镜表</button>
+      </div>
+    </div>
+    <div class="sb-body" id="sbBody">
+      <div class="sb-empty" id="sbEmpty">
+        <div class="sb-empty-icon">🎬</div>
+        <div class="sb-empty-title">分镜工作台</div>
+        <div class="sb-empty-desc">先生成剧本，再点击「生成分镜」进入此工作台。<br>支持导出为 Midjourney / 即梦 / 可灵 / Veo 等 AI 工具的 Prompt。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- Toast -->
+<div class="toast-ctr" id="toastCtr"></div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<script>
+const S={chapters:[],yaml:"",scriptParsed:null,analysis:null,dialogues:null,emotions:null,meta:{},abort:null,activeChapter:0,storyboardShots:[]};
+const E=id=>document.getElementById(id),toastCtr=E("toastCtr");
+function toast(m,t){const d=document.createElement("div");d.className=`toast ${t}`;d.textContent=m;toastCtr.appendChild(d);setTimeout(()=>d.remove(),3500)}
+function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function fmtBytes(b){return b<1024?b+" B":b<1048576?(b/1024).toFixed(1)+" KB":(b/1048576).toFixed(1)+" MB"}
+
+/* ══════════ SAVE / LOAD ══════════ */
+var SAVED_PROJECTS_KEY="novel2script_projects";
+var CURRENT_PROJECT_KEY="novel2script_current";
+function saveProject(name){
+  var pname=name||E("mtitle").value||("项目 "+(S.chapters[0]?S.chapters[0].title:"未命名"));
+  var data={name:pname,novel:E("novelIn").value,chapters:S.chapters,yaml:S.yaml,analysis:S.analysis,dialogues:S.dialogues,emotions:S.emotions,meta:S.meta,activeChapter:S.activeChapter,storyboardShots:S.storyboardShots,mtitle:E("mtitle").value,mformat:E("mformat").value,mnovel:E("mnovel").value,mauthor:E("mauthor").value,savedAt:new Date().toISOString()};
+  try{
+    var all=JSON.parse(localStorage.getItem(SAVED_PROJECTS_KEY)||"{}");
+    all[pname]=data;localStorage.setItem(SAVED_PROJECTS_KEY,JSON.stringify(all));
+    localStorage.setItem(CURRENT_PROJECT_KEY,pname);
+    listProjects();toast("项目已保存："+pname,"ok");
+  }catch(e){toast("保存失败："+e.message,"err")}
+}
+function loadProject(name){
+  var all=JSON.parse(localStorage.getItem(SAVED_PROJECTS_KEY)||"{}");
+  var data=all[name];if(!data)return toast("项目不存在","err");
+  E("novelIn").value=data.novel||"";S.chapters=data.chapters||[];S.yaml=data.yaml||"";S.analysis=data.analysis;S.dialogues=data.dialogues;S.emotions=data.emotions;S.meta=data.meta||{};S.activeChapter=data.activeChapter||0;S.storyboardShots=data.storyboardShots||[];
+  E("mtitle").value=data.mtitle||"";E("mformat").value=data.mformat||"tv_series";E("mnovel").value=data.mnovel||"";E("mauthor").value=data.mauthor||"";
+  S.scriptParsed=!!S.yaml;localStorage.setItem(CURRENT_PROJECT_KEY,name);
+  renderChapterList();updateMeta();listProjects();
+  if(S.analysis){renderAnalysisPage(S.analysis);renderGraphPage(S.analysis);renderTimelinePage(S.analysis)}
+  if(S.chapters.length&&S.chapters[0]){E("chapContent").textContent=S.chapters[0].content;E("wordCnt").textContent=S.chapters[0].content.length.toLocaleString()+" 字"}
+  E("wordCnt").textContent=(E("novelIn").value||getNovelText()).length.toLocaleString()+" 字";
+  switchPage("workspace");toast("已加载项目："+name,"ok");
+}
+function listProjects(){
+  var all=JSON.parse(localStorage.getItem(SAVED_PROJECTS_KEY)||"{}");
+  var names=Object.keys(all);var list=E("projectList");
+  if(!names.length){list.innerHTML='<div style="font-size:11px;color:var(--text-muted);padding:6px 8px">暂无保存的项目</div>';return}
+  list.innerHTML=names.map(function(n){
+    var d=all[n];var dateStr=d.savedAt?new Date(d.savedAt).toLocaleDateString("zh-CN"):"";
+    return '<div class="sidebar-item" style="font-size:11px;padding:5px 8px;gap:4px;cursor:pointer" onclick="loadProject(\''+n.replace(/'/g,"\\'")+'\')" title="'+dateStr+'"><span class="icon" style="font-size:12px">📄</span> '+esc(n.slice(0,12))+(n.length>12?"…":"")+'<span style="margin-left:auto;display:flex;align-items:center;gap:4px"><span style="font-size:9px;color:var(--text-muted)">'+dateStr+'</span><span style="cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0 2px" onclick="deleteProject(\''+n.replace(/'/g,"\\'")+'\',event)" title="删除">×</span></div>';
+  }).join("");
+}
+function deleteProject(name,ev){
+  ev.stopPropagation();
+  if(!confirm("确定删除项目「"+name+"」？此操作不可撤销。"))return;
+  var all=JSON.parse(localStorage.getItem(SAVED_PROJECTS_KEY)||"{}");
+  delete all[name];localStorage.setItem(SAVED_PROJECTS_KEY,JSON.stringify(all));
+  if(localStorage.getItem(CURRENT_PROJECT_KEY)===name)localStorage.removeItem(CURRENT_PROJECT_KEY);
+  listProjects();toast("已删除："+name,"inf");
+}
+function autoSave(){if(E("novelIn").value.length>500||S.yaml.length>0){try{saveProject();}catch(e){}}}
+// Auto-load last session
+(function(){
+  listProjects();
+  var last=localStorage.getItem(CURRENT_PROJECT_KEY);
+  if(last){
+    var all=JSON.parse(localStorage.getItem(SAVED_PROJECTS_KEY)||"{}");
+    if(all[last]){loadProject(last);return}
+  }
+  updateMeta();
+})();
+/* Resolve character ID to Chinese name */
+function buildCharMap(){
+  var map={};
+  if(S.analysis&&S.analysis.characters){S.analysis.characters.forEach(function(c){if(c.name&&c.id)map[c.id]=c.name;if(c.name)map[c.name]=c.name})}
+  if(S.yaml){var matches=S.yaml.matchAll(/^\s+- id:\s*"?(\S+)"?\s*\n\s+name:\s*"?([^"\n]+)"?/gm);for(var m of matches){if(m[1]&&m[2])map[m[1].trim()]=m[2].trim()}}
+  return map;
+}
+function resolveName(id){
+  if(!id)return"—";
+  var map=buildCharMap();
+  if(map[id])return map[id];
+  if(/[一-鿿]/.test(id))return id;
+  return id;
+}
+
+/* Page Switch */
+function switchPage(name){
+  document.querySelectorAll(".page").forEach(function(p){p.classList.remove("active")});
+  document.querySelectorAll(".sidebar-item[data-page]").forEach(function(s){s.classList.remove("active")});
+  E("page-"+name).classList.add("active");
+  document.querySelectorAll('.sidebar-item[data-page="'+name+'"]').forEach(function(s){s.classList.add("active")});
+  // Auto-render analysis data if navigating to analysis page
+  if(name==="analysis"&&S.analysis){
+    E("analysisStats2").style.display="flex";
+    E("asChars").textContent=(S.analysis.characters||[]).length;
+    E("asLocs").textContent=(S.analysis.locations||[]).length;
+    E("asConfs").textContent=(S.analysis.conflicts||[]).length;
+    renderAnalysisPage(S.analysis);renderGraphPage(S.analysis);renderTimelinePage(S.analysis);
+  }
+}
+document.querySelectorAll(".sidebar-item[data-page]").forEach(item=>{item.addEventListener("click",()=>switchPage(item.dataset.page))});
+
+/* Tab Switch */
+document.querySelectorAll(".tabs").forEach(tabs=>{tabs.addEventListener("click",e=>{
+  const b=e.target.closest(".tab");if(!b)return;const g=b.parentElement,tabId=b.dataset.tab;
+  g.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+  const panel=g.closest(".ws-panel")||g.closest(".page")||document;
+  panel.querySelectorAll(".tab-content,.rtab-content").forEach(x=>x.classList.remove("active"));
+  const target=document.getElementById(tabId);if(target)target.classList.add("active");
+})});
+
+/* Chapter Detection */
+function detectChapters(){
+  const t=E("novelIn").value.trim()||getNovelText();if(!t)return toast("请先输入小说文本","err");
+  E("novelIn").value=t;
+  const pats=[/第[零一二三四五六七八九十百千万\d]+章\s*[^\n]*/g,/第[零一二三四五六七八九十百千万\d]+节\s*[^\n]*/g,/Chapter\s+\d+/gi,/^第[零一二三四五六七八九十百千万\d]+回\s*[^\n]*/gm];
+  let ms=[];for(const p of pats){ms=[...t.matchAll(p)];if(ms.length>=3)break}
+  if(!ms.length){const ch=t.split(/\n{3,}/);if(ch.length>=3)ms=ch.map((_,i)=>({0:`段落 ${i+1}`,index:t.indexOf(ch[i])}))}
+  if(!ms.length)return toast("未检测到章节标记，请确保文本包含 3 个以上章节","inf");
+  S.chapters=[];for(let i=0;i<ms.length;i++){const s=ms[i].index,e=i<ms.length-1?ms[i+1].index:t.length;S.chapters.push({number:i+1,title:ms[i][0].trim(),content:t.slice(s,e).trim()})}
+  renderChapterList();updateMeta();toast(`检测到 ${S.chapters.length} 个章节`,"ok");
+}
+function renderChapterList(){
+  const list=E("chapList");
+  list.innerHTML=S.chapters.map((c,i)=>`<div class="chapter-item${i===S.activeChapter?' active':''}" onclick="selectChapter(${i})"><span class="chapter-num">第${c.number}章</span><span class="chapter-title">${esc(c.title)}</span><span class="chapter-words">${c.content.length.toLocaleString()}字</span></div>`).join("");
+  if(!S.chapters.length)list.innerHTML='<div class="empty" style="padding:20px"><div class="empty-desc">粘贴文本并点击检测章节</div></div>';
+}
+function selectChapter(i){S.activeChapter=i;renderChapterList();E("chapContent").textContent=S.chapters[i]?.content||"";E("wordCnt").textContent=(S.chapters[i]?.content.length||0).toLocaleString()+" 字"}
+function getNovelText(){var t=E("novelIn").value.trim();return t||S.chapters.map(function(c){return c.content}).join("\n\n")}
+E("novelIn").addEventListener("input",function(){E("wordCnt").textContent=E("novelIn").value.length.toLocaleString()+" 字"})
+
+/* Meta */
+function getMeta(){return{title:E("mtitle").value,format:E("mformat").value,originalNovel:E("mnovel").value,originalAuthor:E("mauthor").value}}
+function updateMeta(){
+  S.meta={chapter_range:S.chapters.length?`第${S.chapters[0].number}章-第${S.chapters[S.chapters.length-1].number}章`:"",source_text_length:getNovelText().length,script_generated_at:"",conversion_model:"deepseek-chat",dialogue_optimized:false,emotion_analyzed:false,revision:0,revision_history:[]};
+  renderMetaPanel();
+}
+function renderMetaPanel(){
+  E("metaGrid").innerHTML=`
+    <dt>章节范围</dt><dd>${S.meta.chapter_range||"—"}</dd>
+    <dt>原文字数</dt><dd>${S.meta.source_text_length.toLocaleString()} 字</dd>
+    <dt>生成时间</dt><dd>${S.meta.script_generated_at||"—"}</dd>
+    <dt>AI 模型</dt><dd>${S.meta.conversion_model||"—"}</dd>
+    <dt>对白优化</dt><dd>${S.meta.dialogue_optimized?"✅ 已完成":"⏳ 未执行"}</dd>
+    <dt>情绪分析</dt><dd>${S.meta.emotion_analyzed?"✅ 已完成":"⏳ 未执行"}</dd>
+    <dt>修订次数</dt><dd>${S.meta.revision}</dd>`;
+  E("emptyMeta").style.display=S.meta.script_generated_at?"none":"flex";
+}
+
+/* Upload */
+function uploadFile(e){
+  const f=e.target.files[0];if(!f)return;
+  const hasExisting=getNovelText().length>500||S.yaml.length>0;
+  const doUpload=()=>{
+    clearAll();
+    const r=new FileReader();r.onload=ev=>{E("novelIn").value=ev.target.result;detectChapters();switchPage("workspace");toast("小说已上传，请点击「检测章节」","ok")};r.readAsText(f,"UTF-8");
+  };
+  if(hasExisting){if(confirm("当前工作台已有内容。\n\n确定 → 清空并重新上传\n取消 → 保留现有内容")){doUpload()}else{toast("已保留现有内容","inf");e.target.value=""}}
+  else{doUpload()}
+}
+/* Clear */
+function clearAll(){
+  E("novelIn").value="";S.chapters=[];S.yaml="";S.scriptParsed=null;S.analysis=null;S.dialogues=null;S.emotions=null;S.meta={};S.activeChapter=0;S.storyboardShots=[];
+  renderChapterList();E("chapContent").textContent="点击左侧章节可预览内容...";E("wordCnt").textContent="0 字";
+  E("charCards").innerHTML="";E("locCards").innerHTML="";E("confCards").innerHTML="";
+  E("yamlOut").innerHTML="";E("dialWrap").innerHTML="";E("emoWrap").innerHTML="";E("perfWrap").innerHTML="";
+  E("statsRow").style.display="none";E("progWrap").style.display="none";
+  E("emptyChar").style.display="flex";E("emptyLoc").style.display="flex";E("emptyConf").style.display="flex";
+  E("emptyDial").style.display="flex";E("emptyEmo").style.display="flex";E("emptyMeta").style.display="flex";
+  E("btnOptDia").disabled=E("btnOptEmo").disabled=E("btnGenSB").disabled=E("btnCopyYaml").disabled=E("btnDownloadYaml").disabled=E("btnExportDial").disabled=true;
+  E("btnExportDial").style.display="none";
+  E("btnAnalyze").disabled=false;E("btnAnalyze").textContent="🔍 分析剧情";E("btnGen").disabled=false;E("btnGen").textContent="🎬 生成剧本";
+  E("scriptCount").style.display="none";updateMeta();setAIState(0);
+  for(let i=1;i<=5;i++){const el=E("aiStep"+i);el.classList.remove("done","active");el.classList.add("pending")}
+  E("graphSvg").innerHTML="";E("timeline").innerHTML="";
+  E("sbBody").innerHTML='<div class="sb-empty" id="sbEmpty"><div class="sb-empty-icon">🎬</div><div class="sb-empty-title">分镜工作台</div><div class="sb-empty-desc">先生成剧本，再点击「生成分镜」进入此工作台。</div></div>';
+  E("sbSceneCount").textContent="0";E("sbShotCount").textContent="0";
+}
+function handleClearConfirm(){
+  const hasContent=getNovelText().length>500||S.yaml.length>0;
+  if(!hasContent)return toast("工作台已为空","inf");
+  if(confirm("确定清空工作台所有内容吗？\n\n这将清除：\n· 小说文本和章节\n· AI 分析结果\n· 已生成的剧本\n· 对白优化和情绪分析\n\n此操作不可撤销。")){clearAll();toast("工作台已清空","ok")}
+}
+
+/* SSE */
+async function sseFetch(url,body,handlers){
+  S.abort=new AbortController();const pw=E("progWrap");pw.style.display="block";E("progBar").className="progress-fill indet";E("progTxt").textContent="准备中...";
+  try{
+    const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:S.abort.signal});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error||`HTTP ${r.status}`)}
+    const reader=r.body.getReader();const dec=new TextDecoder();let buf="",evt="message";
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split("\n");buf=lines.pop();
+      for(const l of lines){if(l.startsWith("event: ")){evt=l.slice(7).trim();continue}if(!l.startsWith("data: "))continue;
+        try{const d=JSON.parse(l.slice(6));const eev=evt;evt="message";(handlers[eev]||(()=>{}))(d)}catch(_){}}}
+  }catch(err){if(err.name!=="AbortError"){toast(err.message,"err");E("progTxt").textContent="❌ "+err.message}}finally{S.abort=null}
+}
+
+/* AI Steps */
+function setAIState(step){for(let i=1;i<=5;i++){const el=E("aiStep"+i);el.classList.remove("done","active","pending");if(i<step)el.classList.add("done");else if(i===step)el.classList.add("active");else el.classList.add("pending")}}
+E("aiStep1").classList.remove("pending");E("aiStep1").classList.add("done");
+E("aiStep2").classList.remove("pending");E("aiStep2").classList.add("done");
+
+/* API: Analyze */
+async function runAnalyze(){
+  const t=getNovelText();if(t.length<500)return toast("请提供至少 500 字文本","err");
+  if(!S.chapters.length)detectChapters();
+  const btn=E("btnAnalyze");btn.disabled=true;btn.textContent="⟳ 分析中...";
+  S.analysis=null;E("charCards").innerHTML="";E("locCards").innerHTML="";E("confCards").innerHTML="";setAIState(3);
+  let full="";
+  await sseFetch("/api/analyze",{text:t,meta:getMeta()},{
+    progress:d=>{if(d.phase==="chapters")setAIState(3);E("progTxt").textContent=d.message},
+    chunk:d=>{full+=d.text;setAIState(4)},
+    complete:d=>{
+      E("progBar").className="progress-fill";E("progBar").style.width="100%";E("progTxt").textContent="✅ 分析完成";setAIState(5);
+      S.analysis=d.analysis;if(d.parsed&&d.analysis){renderAnalysis(d.analysis);renderGraph(d.analysis);renderTimeline(d.analysis)}
+      toast(`分析完成：${d.stats?.characters||0} 个人物，${d.stats?.locations||0} 个地点，${d.stats?.conflicts||0} 个冲突`,"ok");
+      autoSave();setTimeout(()=>{E("progWrap").style.display="none"},2000);
+      document.querySelector('#midTabs [data-tab="tab-char"]').click();
+    },
+    error:()=>{btn.disabled=false;btn.textContent="🔍 分析剧情"}
+  });
+  btn.disabled=false;btn.textContent="🔍 分析剧情";
+}
+
+function renderAnalysis(a){
+  E("emptyChar").style.display="none";E("emptyLoc").style.display="none";E("emptyConf").style.display="none";
+  const roleMap={protagonist:"主角",antagonist:"反派",supporting:"配角",minor:"次要"};
+  E("charCards").innerHTML=(a.characters||[]).map(c=>`<div class="card"><div class="card-title"><span class="badge ${c.role==='protagonist'?'badge-gold':c.role==='antagonist'?'badge-red':'badge-blue'}">${roleMap[c.role]||c.role||'未知'}</span> ${esc(c.name)}</div><div style="color:var(--text-secondary)">${esc(c.description||'')}</div>${c.traits?`<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${c.traits.map(t=>`<span class="badge badge-muted">${esc(t)}</span>`).join("")}</div>`:""}</div>`).join("");
+  E("locCards").innerHTML=(a.locations||[]).map(l=>`<div class="card"><div class="card-title"><span class="badge ${l.type==='EXT'?'badge-green':'badge-purple'}">${l.type==='EXT'?'外景':'内景'}</span> ${esc(l.name)}</div><div style="color:var(--text-secondary)">${esc(l.description||'')}</div></div>`).join("");
+  E("confCards").innerHTML=(a.conflicts||[]).map(c=>`<div class="card"><div class="card-title"><span class="badge ${c.intensity==='high'?'badge-red':'badge-gold'}">${c.intensity==='high'?'高':c.intensity==='medium'?'中':'低'}</span> ${esc(c.type||'')}</div><div style="color:var(--text-secondary)">${esc(c.description||'')}</div><div class="card-sub" style="margin-top:4px">${(c.involved_characters||[]).map(x=>esc(x)).join(" · ")} | ${esc(c.chapter_range||'')}</div></div>`).join("");
+}
+
+/* Graph */
+function renderGraph(a){
+  const chars=a.characters||[];if(chars.length<2)return;
+  const svg=E("graphSvg"),w=400,h=240,cx=w/2,cy=h/2,r=Math.min(w,h)/2-30;
+  let html="";const edges=[];
+  for(let i=0;i<chars.length;i++)for(let j=i+1;j<chars.length;j++){if(i===0&&j===1)edges.push({from:i,to:j,label:"主要关系",gold:true});else edges.push({from:i,to:j,label:"关联",gold:false})}
+  const positions=chars.map((_,i)=>{const angle=(i/chars.length)*Math.PI*2-Math.PI/2;return{x:cx+Math.cos(angle)*r*0.8,y:cy+Math.sin(angle)*r*0.7}});
+  edges.forEach(e=>{html+=`<line x1="${positions[e.from].x}" y1="${positions[e.from].y}" x2="${positions[e.to].x}" y2="${positions[e.to].y}" class="char-edge${e.gold?' gold':''}"/><text x="${(positions[e.from].x+positions[e.to].x)/2}" y="${(positions[e.from].y+positions[e.to].y)/2-6}" class="char-edge-label">${e.label}</text>`});
+  chars.forEach((c,i)=>{const p=positions[i],color=c.role==="protagonist"?"var(--gold)":"var(--text-secondary)";html+=`<circle cx="${p.x}" cy="${p.y}" r="${c.role==='protagonist'?22:16}" class="char-node" fill="var(--bg-card)" stroke="${color}"/><text x="${p.x}" y="${p.y+4}" class="char-node-text" fill="${color}">${esc(c.name||c.id||'?')}</text>`});
+  svg.innerHTML=html;
+}
+
+/* Timeline */
+function renderTimeline(a){
+  const confs=a.conflicts||[];if(!confs.length)return;
+  const labels=["开端","激励事件","上升","高潮","结局"];
+  E("timeline").innerHTML=labels.map((l,i)=>`<div class="timeline-node"><div class="timeline-dot${i===0||i===labels.length-1?' gold':i===3?' gold':' dim'}"></div><div class="timeline-label">${i===0?'<strong>第一幕</strong>':i===2?'<strong>第二幕</strong>':i===4?'<strong>第三幕</strong>':''}${l}</div></div>`).join("");
+}
+
+/* YAML Highlight */
+function hlYaml(y){
+  return y.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/(^|\n)(\s*)(#[^\n]*)/g,'$1$2<span class="yc">$3</span>')
+    .replace(/(^|\n)(\s*)([\w一-鿿_-]+)(\s*:)/g,'$1$2<span class="yk">$3</span>$4')
+    .replace(/("(?:[^"\\]|\\.)*")/g,'<span class="ys">$1</span>')
+    .replace(/(:\s+)([^\s#\n][^\n#]*?)(\s*(?:#|$|\n))/g,'$1<span class="ys">$2</span>$3')
+    .replace(/(\s)(\d+(?:\.\d+)?)(\s|$|\n)/g,'$1<span class="yn">$2</span>$3')
+    .replace(/\b(true|false|null|yes|no)\b/g,'<span class="yb">$1</span>')
+    .replace(/(^|\n)(\s*)(-\s)/g,'$1$2<span class="yl">$3</span>');
+}
+
+/* API: Convert */
+async function runConvert(){
+  const t=getNovelText();if(t.length<500)return toast("请提供至少 500 字文本","err");
+  if(!S.chapters.length)detectChapters();
+  const btn=E("btnGen");btn.disabled=true;btn.textContent="⟳ 生成中...";
+  S.yaml="";S.scriptParsed=null;E("yamlOut").innerHTML="";E("statsRow").style.display="none";
+  E("btnOptDia").disabled=E("btnOptEmo").disabled=E("btnGenSB").disabled=E("btnCopyYaml").disabled=E("btnDownloadYaml").disabled=E("btnExportDial").disabled=true;
+  E("btnExportDial").style.display="none";
+  S.dialogues=null;S.emotions=null;E("dialWrap").innerHTML="";E("emoWrap").innerHTML="";E("perfWrap").innerHTML="";
+  E("emptyDial").style.display="flex";E("emptyEmo").style.display="flex";setAIState(3);
+
+  await sseFetch("/api/convert",{text:t,meta:getMeta()},{
+    progress:d=>{E("progTxt").textContent=d.message;if(d.phase==="detect")setAIState(3);else if(d.phase==="ai")setAIState(4);else if(d.phase==="parse")setAIState(5);
+      if(d.chapters?.length){S.chapters=d.chapters.map((c,i)=>({number:c.number||i+1,title:c.title,content:""}));renderChapterList()}},
+    chunk:d=>{S.yaml+=d.text;E("yamlOut").innerHTML=hlYaml(S.yaml);E("yamlOut").scrollTop=E("yamlOut").scrollHeight},
+    warning:d=>toast(d.message,"inf"),
+    complete:d=>{
+      S.yaml=d.yaml;S.scriptParsed=d.parsed;
+      E("yamlOut").innerHTML=hlYaml(d.yaml);setAIState(5);
+      E("progBar").className="progress-fill";E("progBar").style.width="100%";E("progTxt").textContent=d.parsed?"✅ 剧本生成完成":"⚠ YAML 解析未通过，请手动检查";
+      E("statsRow").style.display="flex";E("sChapters").textContent=d.stats.chapterCount;E("sScenes").textContent=d.stats.sceneCount;
+      E("sChars").textContent=d.stats.characterCount;
+      E("sConflicts").textContent=(S.analysis?.conflicts?.length)||"-";
+      E("yamlFileSize").textContent=fmtBytes(d.stats.yamlLength);
+      if(d.parsed){E("btnOptDia").disabled=E("btnOptEmo").disabled=E("btnGenSB").disabled=false}
+      E("btnCopyYaml").disabled=E("btnDownloadYaml").disabled=false;
+      S.meta.script_generated_at=new Date().toISOString();S.meta.revision=(S.meta.revision||0)+1;
+      S.meta.revision_history=S.meta.revision_history||[];S.meta.revision_history.push({version:S.meta.revision,timestamp:S.meta.script_generated_at,summary:"初稿生成"});
+      if(S.chapters.length)S.meta.chapter_range=`第${S.chapters[0].number}章-第${S.chapters[S.chapters.length-1].number}章`;
+      S.meta.source_text_length=t.length;renderMetaPanel();
+      buildStoryboardShots();
+      const sc=E("scriptCount");sc.style.display="inline";sc.textContent="1";
+      toast(`剧本生成完成！共 ${d.stats.sceneCount||"N"} 个场景`,"ok");
+      autoSave();setTimeout(()=>E("progWrap").style.display="none",2000);
+      document.querySelector('#rightTabs [data-tab="rtab-yaml"]').click();
+    },
+    error:()=>{btn.disabled=false;btn.textContent="🎬 生成剧本"}
+  });
+  btn.disabled=false;btn.textContent="🎬 生成剧本";
+}
+
+/* ══════════ STORYBOARD ══════════ */
+function buildStoryboardShots(){
+  S.storyboardShots=[];
+  // Try multiple YAML split patterns to handle different indentation styles
+  var scenes=S.yaml.split(/(?=\n  - scene_number:)/g);
+  if(scenes.length<2)scenes=S.yaml.split(/(?=\n    - scene_number:)/g);
+  if(scenes.length<2)scenes=S.yaml.split(/(?=\n- scene_number:)/g);
+  scenes.forEach(function(s,i){
+    var sn=s.match(/scene_number:\s*(\d+)/),loc=s.match(/name:\s*"?([^"\n]+)"?/),type=s.match(/type:\s*"?([^"\n]+)"?/);
+    var sum=s.match(/summary:\s*"?([^"\n]+)"?/),mood=s.match(/mood:\s*"?([^"\n]+)"?/);
+    var beats=s.split(/(?=\n\s{4,8}- type:)/g);var shotNum=0;
+    // Collect characters from this scene
+    var sceneChars=[];
+    beats.forEach(function(b){
+      if(b.indexOf("type: dialogue")>=0||b.indexOf('type: "dialogue"')>=0){
+        var ch=b.match(/character:\s*"?([^"\n]+)"?/);
+        if(ch&&sceneChars.indexOf(ch[1].trim())<0)sceneChars.push(ch[1].trim());
+      }
+    });
+    // Also check characters_present
+    var cpMatch=s.match(/characters_present:[\s\S]*?(?=\n\s{4}\w)/);
+    if(cpMatch){
+      var idMatches=cpMatch[0].matchAll(/id:\s*"?([^"\n]+)"?/g);
+      for(var m of idMatches){if(m[1]&&sceneChars.indexOf(m[1].trim())<0)sceneChars.push(m[1].trim())}
+    }
+    // Create shots from action beats, or fallback to one overview shot per scene
+    var hasShots=false;
+    beats.forEach(function(b){
+      if(b.indexOf("type: action")>=0||b.indexOf('type: "action"')>=0){
+        var desc=b.match(/description:\s*"?([^"\n]+)"?/),cam=b.match(/camera:\s*"?([^"\n]+)"?/);
+        shotNum++;
+        var descText=desc?desc[1].trim():"",camText=cam?cam[1].trim():"中景";
+        hasShots=true;
+        S.storyboardShots.push({
+          scene:sn?sn[1]:i+1,shot:shotNum,
+          location:loc?loc[1].trim():"未知地点",locationType:type?type[1].trim():"INT",
+          camera:camText,
+          characters:sceneChars.join("、")||"—",
+          description:descText,
+          promptMJ:(descText||sum||"").slice(0,120)+" — cinematic lighting, "+camText+", "+(type?type[1].trim():"INT")+", Chinese fantasy style --ar 16:9",
+          promptJimeng:(descText||sum||"").slice(0,120)+"，"+camText+"，电影级光影，玄幻写实风格"
+        });
+      }
+    });
+    // Fallback: if no action beats, create one overview card from scene summary
+    if(!hasShots){
+      shotNum=1;
+      S.storyboardShots.push({
+        scene:sn?sn[1]:i+1,shot:1,
+        location:loc?loc[1].trim():"未知地点",locationType:type?type[1].trim():"INT",
+        camera:"全景",
+        characters:sceneChars.join("、")||"—",
+        description:sum?sum[1].trim():(mood?mood[1].trim():"场景概述"),
+        promptMJ:"Scene "+(sn?sn[1]:i+1)+": "+(loc?loc[1].trim():"")+" — "+(sum?sum[1].trim():"")+" — cinematic lighting, fantasy, Chinese style --ar 16:9",
+        promptJimeng:"场景"+(sn?sn[1]:i+1)+"："+(loc?loc[1].trim():"")+"，"+(sum?sum[1].trim():"")+"，电影级光影，玄幻写实"
+      });
+    }
+  });
+  renderStoryboardWorkspace();
+}
+function openStoryboard(){
+  if(!S.yaml){toast("请先生成剧本","err");return}
+  if(!S.storyboardShots.length)buildStoryboardShots();
+  switchPage("storyboard");
+}
+function renderStoryboardWorkspace(){
+  E("sbEmpty").style.display=S.storyboardShots.length?"none":"flex";
+  E("sbSceneCount").textContent=new Set(S.storyboardShots.map(s=>s.scene)).size;
+  E("sbShotCount").textContent=S.storyboardShots.length;
+  let html="";
+  const groups={};S.storyboardShots.forEach(s=>{const key=`场景 ${s.scene}`;if(!groups[key])groups[key]=[];groups[key].push(s)});
+  Object.entries(groups).forEach(([scene,shots])=>{
+    html+=`<div class="sb-scene-group"><div class="sb-scene-label">📍 ${scene} — ${shots[0].location} <span style="font-weight:400;color:var(--text-muted)">${shots.length} 个镜头</span></div><div class="sb-cards">`;
+    shots.forEach(s=>{html+=`
+      <div class="sb-card">
+        <div class="sb-card-preview"><span class="shot-num">镜头 ${s.shot}</span>🎥</div>
+        <div class="sb-card-body">
+          <div class="sb-card-row">
+            <span class="badge badge-gold">${esc(s.camera)}</span>
+            <span class="badge badge-muted">${esc(s.locationType)}</span>
+            <span class="badge badge-blue">${esc(s.characters)}</span>
+          </div>
+          <div class="sb-card-desc">${esc(s.description)||"—"}</div>
+          <div class="sb-card-prompts">
+            <div><div class="sb-prompt-label">MJ Prompt</div><div class="sb-prompt">${esc(s.promptMJ)}</div></div>
+            <div><div class="sb-prompt-label">即梦 Prompt</div><div class="sb-prompt">${esc(s.promptJimeng)}</div></div>
+          </div>
+        </div>
+      </div>`});
+    html+=`</div></div>`;
+  });
+  E("sbBody").innerHTML=(html||"")+'<div id="sbEmpty" class="sb-empty" style="display:none"><div class="sb-empty-icon">🎬</div><div class="sb-empty-title">分镜工作台</div><div class="sb-empty-desc">先生成剧本，再点击「生成分镜」进入此工作台。</div></div>';
+}
+function exportStoryboard(){
+  if(!S.storyboardShots.length)return toast("无分镜数据","err");
+  let csv="场景,镜头,地点,景别,人物,画面描述,MJ Prompt,即梦 Prompt\n";
+  S.storyboardShots.forEach(s=>{csv+=`${s.scene},${s.shot},${s.location},${s.camera},${s.characters},"${s.description}","${s.promptMJ}","${s.promptJimeng}"\n`});
+  const b=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="storyboard.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);
+  toast("分镜表已导出 CSV","ok");
+}
+
+/* API: Optimize Dialogues */
+async function runOptimizeDialogues(){
+  if(!S.yaml)return toast("请先生成剧本","err");
+  const btn=E("btnOptDia");btn.disabled=true;btn.textContent="⟳ 优化中...";
+  S.dialogues=null;E("dialWrap").innerHTML="";E("emptyDial").style.display="flex";
+  await sseFetch("/api/optimize-dialogues",{yaml:S.yaml},{
+    progress:d=>E("progTxt").textContent=d.message,
+    chunk:()=>E("progTxt").textContent="AI 正在优化对白...",
+    complete:d=>{
+      E("progBar").className="progress-fill";E("progBar").style.width="100%";E("progTxt").textContent="✅ 对白优化完成";
+      S.dialogues=d.dialogues||[];renderDialogues(S.dialogues,d.summary);
+      S.meta.dialogue_optimized=true;renderMetaPanel();
+      toast(`已优化 ${d.optimized_count}/${d.total_count} 句对白`,"ok");autoSave();
+      setTimeout(()=>E("progWrap").style.display="none",2000);
+      document.querySelector('#rightTabs [data-tab="rtab-dial"]').click();
+    },
+    error:()=>{btn.disabled=false;btn.textContent="✨ 优化对白"}
+  });
+  btn.disabled=false;btn.textContent="✨ 优化对白";
+}
+function renderDialogues(dialogues,summary){
+  E("emptyDial").style.display="none";
+  let h=summary?`<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;padding:8px 12px;background:var(--blue-bg);border-radius:var(--radius)">📝 ${esc(summary)}</div>`:"";
+  h+=`<table class="dial-table"><thead><tr><th>序号</th><th>角色</th><th>原始对白</th><th>AI 优化</th><th>改进说明</th></tr></thead><tbody>`;
+  dialogues.forEach(function(d){var name=resolveName(d.character);h+='<tr><td style="color:var(--text-muted)">'+(d.index!=null?d.index+1:"-")+'</td><td style="font-weight:600">'+esc(name)+'</td><td class="dial-orig">'+esc(d.original||"")+'</td><td class="dial-opt">'+esc(d.optimized||"")+'</td><td class="dial-imp">'+esc(d.improvement||"")+'</td></tr>'});
+  h+="</tbody></table>";E("dialWrap").innerHTML=h;E("btnExportDial").style.display="inline-flex";E("btnExportDial").disabled=false;
+}
+function exportDialogues(){
+  if(!S.dialogues||!S.dialogues.length)return toast("暂无对白数据","err");
+  var csv="序号,角色,原始对白,AI优化,改进说明\n";
+  S.dialogues.forEach(function(d,i){csv+=i+1+","+d.character+',"'+d.original+'","'+d.optimized+'","'+d.improvement+'"\n'});
+  var b=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  var u=URL.createObjectURL(b);var a=document.createElement("a");a.href=u;a.download="dialogues.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);
+  toast("对白表已导出 CSV","ok");
+}
+
+/* API: Analyze Emotions */
+async function runAnalyzeEmotions(){
+  if(!S.yaml)return toast("请先生成剧本","err");
+  const btn=E("btnOptEmo");btn.disabled=true;btn.textContent="⟳ 分析中...";
+  S.emotions=null;E("emoWrap").innerHTML="";E("perfWrap").innerHTML="";E("emptyEmo").style.display="flex";
+  await sseFetch("/api/analyze-emotions",{yaml:S.yaml},{
+    progress:d=>E("progTxt").textContent=d.message,
+    chunk:()=>E("progTxt").textContent="AI 正在分析情绪...",
+    complete:d=>{
+      E("progBar").className="progress-fill";E("progBar").style.width="100%";E("progTxt").textContent="✅ 情绪分析完成";
+      S.emotions={emotions:d.emotions||{},arcs:d.emotion_arcs||{},notes:d.performance_notes||{},tone:d.overall_tone||""};
+      renderEmotions(S.emotions);S.meta.emotion_analyzed=true;renderMetaPanel();
+      toast("情绪分析完成","ok");autoSave();
+      setTimeout(()=>E("progWrap").style.display="none",2000);
+      document.querySelector('#rightTabs [data-tab="rtab-emo"]').click();
+    },
+    error:()=>{btn.disabled=false;btn.textContent="🎭 情绪分析"}
+  });
+  btn.disabled=false;btn.textContent="🎭 情绪分析";
+}
+function renderEmotions(emo){
+  E("emptyEmo").style.display="none";
+  const chars=Object.keys(emo.emotions||{}),scenesSet=new Set();
+  Object.values(emo.emotions||{}).forEach(m=>Object.keys(m).forEach(k=>scenesSet.add(k)));
+  const scenes=[...scenesSet].sort();
+  if(chars.length&&scenes.length){
+    let g=`<div class="emo-grid" style="grid-template-columns:auto repeat(${scenes.length},1fr)"><div class="emo-hdr" style="grid-column:1/-1;text-align:center;padding:6px">角色 × 场景 情绪矩阵</div>`;
+    g+=`<div class="emo-hdr">角色</div>`+scenes.map(s=>`<div class="emo-hdr" style="font-size:10px">${esc(s)}</div>`).join("");
+    chars.forEach(function(c){var name=resolveName(c);g+='<div style="font-weight:600;font-size:11px">'+esc(name)+'</div>';scenes.forEach(function(sn){var tag=(emo.emotions[c]||{})[sn]||"·";g+='<div style="text-align:center">'+(tag==="·"?'<span style="color:var(--text-muted)">·</span>':'<span class="emo-tag">'+esc(tag)+'</span>')+'</div>'});});
+    g+="</div>";E("emoWrap").innerHTML=g;
+  }
+  let notes="";
+  if(emo.arcs&&Object.keys(emo.arcs).length){
+    notes+=`<div style="margin-top:8px;font-weight:600;font-size:12px;color:var(--text-secondary)">📈 情绪弧线</div>`;
+    Object.entries(emo.arcs).forEach(function(e){var c=e[0],a=e[1],name=resolveName(c);notes+='<div class="card"><div class="card-title">'+esc(name)+'</div><div style="color:var(--text-secondary);font-size:11px">'+esc(a.arc_description||"")+'</div>'+(a.key_moments?'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">'+a.key_moments.map(function(m){return '<span class="badge badge-gold">'+esc(m)+'</span>'}).join("")+'</div>':"")+'</div>'});
+  }
+  if(emo.notes&&Object.keys(emo.notes).length){
+    notes+=`<div style="margin-top:8px;font-weight:600;font-size:12px;color:var(--text-secondary)">🎯 表演指导</div>`;
+    Object.entries(emo.notes).forEach(function(e){var c=e[0],n=e[1],name=resolveName(c);notes+='<div class="card"><div class="card-title">'+esc(name)+'</div><div style="color:var(--text-secondary);font-size:11px">'+esc(typeof n==="string"?n:n.description||"")+'</div></div>'});
+  }
+  if(emo.tone)notes+=`<div style="margin-top:8px;padding:10px 14px;background:var(--gold-dim);border-radius:var(--radius);font-size:12px;border:1px solid rgba(212,175,55,0.2)"><strong>全剧情绪基调：</strong>${esc(emo.tone)}</div>`;
+  E("perfWrap").innerHTML=notes;
+}
+
+/* Copy / Download */
+function doCopy(){if(!S.yaml)return;navigator.clipboard.writeText(S.yaml).then(()=>toast("已复制到剪贴板","ok")).catch(()=>{const ta=document.createElement("textarea");ta.value=S.yaml;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();toast("已复制到剪贴板","ok")})}
+function doDownload(){if(!S.yaml)return;const title=(E("mtitle").value||"script").replace(/[\\\/:*?"<>|]/g,"_");const b=new Blob([S.yaml],{type:"application/x-yaml"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${title}.yaml`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);toast("已下载 YAML 文件","ok")}
+
+/* Demo */
+function loadDemo(){
+  E("novelIn").value=DEMO;E("mtitle").value="笑傲江湖·第一章改编";E("mformat").value="tv_series";E("mnovel").value="笑傲江湖";E("mauthor").value="金庸";
+  detectChapters();S.activeChapter=0;renderChapterList();
+  if(S.chapters[0]){E("chapContent").textContent=S.chapters[0].content;E("wordCnt").textContent=S.chapters[0].content.length.toLocaleString()+" 字"}
+  switchPage("workspace");toast("已加载示例：《笑傲江湖》3 章","inf")
+}
+
+/* ══════════ Analysis Page JS ══════════ */
+async function runAnalyzeForPage(){
+  var t=getNovelText();if(t.length<500)return toast("请先在剧本工作台中粘贴小说文本","err");
+  if(!S.chapters.length)detectChapters();
+  var btn=E("btnAnalyzePage");btn.disabled=true;btn.textContent="⟳ 分析中...";
+  var full="";
+  await sseFetch("/api/analyze",{text:t,meta:getMeta()},{
+    progress:function(){},
+    chunk:function(d){full+=d.text},
+    complete:function(d){
+      S.analysis=d.analysis;
+      if(d.parsed&&d.analysis){
+        E("analysisStats2").style.display="flex";
+        E("asChars").textContent=d.stats.characters;E("asLocs").textContent=d.stats.locations;E("asConfs").textContent=d.stats.conflicts;
+        renderAnalysisPage(d.analysis);renderGraphPage(d.analysis);renderTimelinePage(d.analysis);
+        toast("分析完成："+d.stats.characters+" 个人物，"+d.stats.locations+" 个地点，"+d.stats.conflicts+" 个冲突","ok");
+      }
+    },
+    error:function(){}
+  });
+  btn.disabled=false;btn.textContent="🔍 AI 分析剧情";
+}
+function renderAnalysisPage(a){
+  var roleMap={protagonist:"主角",antagonist:"反派",supporting:"配角",minor:"次要"};
+  E("charCardsPage").innerHTML=(a.characters||[]).map(function(c){return '<div class="card"><div class="card-title"><span class="badge '+(c.role==='protagonist'?'badge-gold':c.role==='antagonist'?'badge-red':'badge-blue')+'">'+(roleMap[c.role]||c.role||'未知')+'</span> '+esc(c.name)+'</div><div style="color:var(--text-secondary)">'+esc(c.description||'')+'</div>'+(c.traits?'<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">'+c.traits.map(function(t){return '<span class="badge badge-muted">'+esc(t)+'</span>'}).join("")+'</div>':"")+'</div>'}).join("");
+  E("locCardsPage").innerHTML=(a.locations||[]).map(function(l){return '<div class="card"><div class="card-title"><span class="badge '+(l.type==='EXT'?'badge-green':'badge-purple')+'">'+(l.type==='EXT'?'外景':'内景')+'</span> '+esc(l.name)+'</div><div style="color:var(--text-secondary)">'+esc(l.description||'')+'</div></div>'}).join("");
+  E("confCardsPage").innerHTML=(a.conflicts||[]).map(function(c){return '<div class="card"><div class="card-title"><span class="badge '+(c.intensity==='high'?'badge-red':'badge-gold')+'">'+(c.intensity==='high'?'高':c.intensity==='medium'?'中':'低')+'</span> '+esc(c.type||'')+'</div><div style="color:var(--text-secondary)">'+esc(c.description||'')+'</div><div class="card-sub" style="margin-top:4px">'+(c.involved_characters||[]).map(function(x){return esc(x)}).join(" · ")+' | '+esc(c.chapter_range||'')+'</div></div>'}).join("");
+}
+function renderGraphPage(a){
+  var chars=a.characters||[];if(chars.length<2)return;
+  var svg=E("graphSvgPage"),w=400,h=300,cx=w/2,cy=h/2,r=Math.min(w,h)/2-50;
+  svg.innerHTML="";var edges=[];
+  for(var i=0;i<chars.length;i++)for(var j=i+1;j<chars.length;j++){if(i===0&&j===1)edges.push({from:i,to:j,label:"主要关系",gold:true});else edges.push({from:i,to:j,label:"关联",gold:false})}
+  var positions=chars.map(function(_,i){var angle=(i/chars.length)*Math.PI*2-Math.PI/2;return{x:cx+Math.cos(angle)*r*0.78,y:cy+Math.sin(angle)*r*0.65}});
+  edges.forEach(function(e){var ns="http://www.w3.org/2000/svg";var line=document.createElementNS(ns,"line");line.setAttribute("x1",positions[e.from].x);line.setAttribute("y1",positions[e.from].y);line.setAttribute("x2",positions[e.to].x);line.setAttribute("y2",positions[e.to].y);line.setAttribute("class","char-edge"+(e.gold?" gold":""));svg.appendChild(line);var txt=document.createElementNS(ns,"text");txt.setAttribute("x",(positions[e.from].x+positions[e.to].x)/2);txt.setAttribute("y",(positions[e.from].y+positions[e.to].y)/2-6);txt.setAttribute("class","char-edge-label");txt.textContent=e.label;svg.appendChild(txt)});
+  chars.forEach(function(c,i){var p=positions[i],color=c.role==="protagonist"?"var(--gold)":"var(--text-secondary)",ns="http://www.w3.org/2000/svg";var circle=document.createElementNS(ns,"circle");circle.setAttribute("cx",p.x);circle.setAttribute("cy",p.y);circle.setAttribute("r",c.role==="protagonist"?26:20);circle.setAttribute("class","char-node");circle.setAttribute("fill","var(--bg-card)");circle.setAttribute("stroke",color);circle.setAttribute("stroke-width",c.role==="protagonist"?"2":"1");svg.appendChild(circle);var text=document.createElementNS(ns,"text");text.setAttribute("x",p.x);text.setAttribute("y",p.y+5);text.setAttribute("class","char-node-text");text.setAttribute("fill",color);text.textContent=c.name||c.id||"?";svg.appendChild(text)});
+}
+function renderTimelinePage(a){
+  var confs=a.conflicts||[];if(!confs.length)return;
+  var labels=["开端","激励事件","上升","高潮","结局"];
+  E("timelinePage").innerHTML=labels.map(function(l,i){return '<div class="timeline-node"><div class="timeline-dot'+(i===0||i===labels.length-1?' gold':i===3?' gold':' dim')+'"></div><div class="timeline-label">'+(i===0?'<strong>第一幕</strong>':i===2?'<strong>第二幕</strong>':i===4?'<strong>第三幕</strong>':'')+l+'</div></div>'}).join("");
+}
+
+updateMeta();
+
+const DEMO=`第一章 灭门
+
+和风熏柳，花香醉人，正是南国春光漫烂季节。福建省福州府西门大街，青石板路笔直的伸展出去，直通西门。一座建构宏伟的宅第之前，左右两座石坛中各竖一根两丈来高的旗杆，杆顶飘扬青旗。旗上黄色丝线绣着一头张牙舞爪、神态威猛的雄狮。宅第大门楣上悬着一块金字匾额，上书"福威镖局"四个大字。
+
+林平之刚从郊外打猎回来，骑着一匹白马，马上挂满了野兔、野鸡。他今年十九岁，生得眉清目秀，十分俊美。
+
+忽听得前面人声嘈杂，一群人围在茶摊前看热闹。林平之好奇心起，策马上前。
+
+只见两个身佩刀剑的汉子正围着一个卖茶少女，出言调笑。那少女不过十五六岁年纪，吓得瑟瑟发抖。旁边虽有不少行人，却没一个敢上前劝阻。
+
+林平之年轻气盛，见到这等不平之事，登时心头火起。他翻身下马，分开人群走上前去，朗声说道："喂，你们两个大男人欺负一个弱女子，不觉得丢人吗？"
+
+那两个汉子转过头来，满脸横肉的汉子上下打量了林平之一眼，冷笑道："哪来的小白脸？也敢管大爷的闲事？识相的快滚！"
+
+林平之当下抱拳道："在下福州林平之。不知二位高姓大名？"
+
+瘦骨嶙峋的汉子嘿嘿一笑："小子，你是福威镖局的人？"
+
+林平之道："正是。"
+
+满脸横肉的汉子狞笑道："小子，你站稳了。大爷是青城派余人彦，这是我师弟贾人达。你那三脚猫功夫，还是回家吃奶去吧！"
+
+林平之心头一凛，但事已至此，岂能退缩？当下一挺长剑，喝道："青城派又如何？光天化日之下调戏良家妇女，难道还有理了？"
+
+余人彦嘿嘿冷笑，缓缓抽出腰间佩刀。那刀在夕阳下闪着蓝汪汪的光芒，显是淬了剧毒。话音未落，人已欺近，一刀劈向林平之面门。
+
+这一刀又快又狠，林平之慌忙举剑格挡。"当"的一声，刀剑相交，林平之只觉手臂酸麻，长剑险些脱手。
+
+便在此时，忽听一声清叱："住手！"
+
+一条青影从人群中跃出，挡在林平之身前。只见这人身材高瘦，身穿青布长袍，面容清癯，三缕长须飘拂。
+
+余人彦收刀后退，喝道："来者何人？"
+
+那青袍人微微颔首："华山，岳不群。"
+
+余人彦和贾人达对望一眼，面上都现出惧色。余人彦收起刀，抱拳道："原来是岳掌门，在下失敬了。告辞！"
+
+岳不群转身看向林平之，温言道："小兄弟，你没事吧？"
+
+林平之惊魂未定，忙抱拳道："多谢前辈相救。"
+
+第二章 聆秘
+
+回到镖局，林震南正在大厅中和几位镖师议事。听得华山派岳掌门亲临，不由又惊又喜，忙率众镖师迎出大门。
+
+岳不群被请进大厅奉茶。林震南道："不知岳掌门大驾光临，有失远迎，恕罪恕罪。"
+
+岳不群谦逊道："林总镖头客气了。贫道路过福州，恰逢贵公子路见不平，拔刀相助，贫道便顺手帮了个小忙。"
+
+岳不群又道："不过林总镖头，青城派的人出现在福州，非比寻常。他们此行只怕——和老先生有关。"
+
+林震南面色微微变了变，却旋即镇定下来。
+
+岳不群低声道："林总镖头，你可曾听说'辟邪剑谱'四字？"
+
+林震南脸色大变，半晌方道："岳掌门，此事说来话长。那辟邪剑谱——确实曾在我林家。只是——"
+
+岳不群摆了摆手，道："林总镖头不必多言。贫道此来，并非觊觎剑谱。只是要提醒你一句：青城派既已遣人来福州，只怕不日将有大队人马到来。林总镖头还须早作打算。"
+
+林震南起身深深一揖："多谢岳掌门提醒。大恩不敢言谢。"
+
+岳不群站起身来："天色已晚，贫道告辞。"
+
+是夜，林平之躺在床上翻来覆去睡不着。白天发生的事一幕幕在脑海中浮现，让他隐隐感到一种说不出的不安。
+
+第三章 突变
+
+第二日清晨，林平之被一阵急促的敲门声惊醒。
+
+"少爷！少爷！不好了！"是老管家林福的声音，带着哭腔。
+
+林平之匆匆穿衣出门，只见林福面色惨白，浑身发抖。
+
+"老爷……老爷他……被人害了！"
+
+林平之脑中嗡的一声，拔腿就往正厅跑去。
+
+大厅之中，林震南倒在血泊之中，胸口一道深可见骨的剑伤。地上用鲜血写了四个大字："交出剑谱。"
+
+林平之扑到父亲身边，哭喊道："爹！爹！"
+
+林震南微微睁开眼睛，用尽最后一丝力气抓住林平之的手："平之……快走……去华山……找岳掌门……"话音未落，气绝身亡。
+
+林平之抱着父亲的尸身，痛哭失声。
+
+他站起身，对着父亲的遗体磕了三个响头："爹，孩儿一定为您报仇！"
+
+他转身奔出镖局，翻身上马，向华山方向疾驰而去。
+
+身后，福威镖局的旗帜在晨风中无力地飘动，仿佛在为他送行。`;
+</script>
+</body>
+</html>

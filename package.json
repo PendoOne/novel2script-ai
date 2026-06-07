@@ -1,0 +1,26 @@
+{
+  "name": "novel-to-script",
+  "version": "1.0.0",
+  "description": "AI 小说转剧本工具 — 将小说章节自动转换为结构化 YAML 剧本",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "novel",
+    "script",
+    "screenplay",
+    "yaml",
+    "ai",
+    "deepseek"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "js-yaml": "^4.1.0",
+    "openai": "^4.83.0",
+    "serverless-http": "^4.0.0"
+  }
+}
