@@ -38,7 +38,7 @@ cp .env.example .env
 npm start
 ```
 
-打开浏览器访问 `http://localhost:3000`。
+打开浏览器访问 `https://keen-sfogliatella-6423bb.netlify.app/`。
 
 ### 4. 使用
 
