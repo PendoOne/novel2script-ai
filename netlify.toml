@@ -5,6 +5,10 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  external_node_modules = ["express", "openai", "js-yaml", "serverless-http", "dotenv"]
+
+[functions."api"]
+  timeout = 26
 
 [[redirects]]
   from = "/api/*"

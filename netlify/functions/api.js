@@ -11,7 +11,7 @@ app.use(express.json({ limit: "5mb" }));
 // ─── Config from Netlify env vars ──────────────────────────────────────
 const API_KEY = process.env.API_KEY;
 const API_BASE_URL = process.env.API_BASE_URL || "https://api.deepseek.com";
-const AI_MODEL = process.env.AI_MODEL || "deepseek-chat";
+const AI_MODEL = process.env.AI_MODEL || "deepseek-chat"; // Netlify 必须用 chat，reasoner 思考时间超 26s 限制
 
 const client = API_KEY ? new OpenAI({ apiKey: API_KEY, baseURL: API_BASE_URL }) : null;
 
@@ -222,7 +222,7 @@ app.post("/api/convert", async (req, res) => {
 
     const stream = await client.chat.completions.create({
       model: AI_MODEL, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }],
-      max_tokens: 16384, temperature: 0.4, stream: true,
+      max_tokens: 8192, temperature: 0.4, stream: true,
     });
 
     let fullResponse = "";
