@@ -27,6 +27,9 @@ functions = "C:\\Users\\PendoOne\\Desktop\\AI\\ai小说转剧本\\netlify\\funct
 
 [functions]
 
+[functions.api]
+timeout = 26.0
+
 [functions."*"]
 node_bundler = "esbuild"
 

@@ -1,385 +1,212 @@
-// Netlify Serverless Function — wraps Express app
-const serverless = require("serverless-http");
-const express = require("express");
-const OpenAI = require("openai").default;
-const yaml = require("js-yaml");
-const path = require("path");
+// Netlify Function — 纯 fetch 实现，零外部 SDK 依赖
+const API_KEY = process.env.API_KEY || "";
+const API_BASE = process.env.API_BASE_URL || "https://api.deepseek.com";
+const AI_MODEL = process.env.AI_MODEL || "deepseek-chat";
 
-const app = express();
-app.use(express.json({ limit: "5mb" }));
+function json(res, data, status) { res.statusCode = status || 200; res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(data)); }
 
-// ─── Config from Netlify env vars ──────────────────────────────────────
-const API_KEY = process.env.API_KEY;
-const API_BASE_URL = process.env.API_BASE_URL || "https://api.deepseek.com";
-const AI_MODEL = process.env.AI_MODEL || "deepseek-chat"; // Netlify 必须用 chat，reasoner 思考时间超 26s 限制
-
-const client = API_KEY ? new OpenAI({ apiKey: API_KEY, baseURL: API_BASE_URL }) : null;
-
-// ─── Chapter Detection ──────────────────────────────────────────────────
+// ─── Chapter detection ──────────────────────────────────────────────────
 function detectChapters(text) {
-  const patterns = [
-    /第[零一二三四五六七八九十百千万\d]+章\s*[^\n]*/g,
-    /第[零一二三四五六七八九十百千万\d]+节\s*[^\n]*/g,
-    /Chapter\s+\d+/gi,
-    /CHAPTER\s+[IVXLCDM]+/g,
-    /^第[零一二三四五六七八九十百千万\d]+回\s*[^\n]*/gm,
-  ];
-  for (const pattern of patterns) {
-    const matches = [...text.matchAll(pattern)];
-    if (matches.length >= 3) return matches.map((m) => ({ title: m[0].trim(), index: m.index }));
-  }
-  const paragraphs = text.split(/\n{2,}/);
-  if (paragraphs.length >= 10) {
-    const chunks = [];
-    const chunkSize = Math.ceil(paragraphs.length / Math.ceil(paragraphs.length / 50));
-    for (let i = 0; i < paragraphs.length; i += chunkSize) {
-      chunks.push({ title: `段落 ${Math.floor(i / chunkSize) + 1}`, index: text.indexOf(paragraphs[i]) });
-    }
-    return chunks;
-  }
+  const pats = [/第[零一二三四五六七八九十百千万\d]+章\s*[^\n]*/g, /第[零一二三四五六七八九十百千万\d]+节\s*[^\n]*/g, /Chapter\s+\d+/gi, /^第[零一二三四五六七八九十百千万\d]+回\s*[^\n]*/gm];
+  for (const p of pats) { const m = [...text.matchAll(p)]; if (m.length >= 3) return m.map(x => ({ title: x[0].trim(), index: x.index })); }
+  const pgs = text.split(/\n{2,}/); if (pgs.length >= 10) { const cs = Math.ceil(pgs.length / Math.ceil(pgs.length / 50)); const r = []; for (let i = 0; i < pgs.length; i += cs) r.push({ title: `段落 ${Math.floor(i / cs) + 1}`, index: text.indexOf(pgs[i]) }); return r; }
   return [{ title: "全文", index: 0 }];
 }
-
-function splitChapters(text, chapterMatches) {
-  const chapters = [];
-  for (let i = 0; i < chapterMatches.length; i++) {
-    const start = chapterMatches[i].index;
-    const end = i < chapterMatches.length - 1 ? chapterMatches[i + 1].index : text.length;
-    chapters.push({ number: i + 1, title: chapterMatches[i].title, content: text.slice(start, end).trim() });
-  }
-  return chapters;
+function splitChapters(text, matches) {
+  const r = []; for (let i = 0; i < matches.length; i++) { const s = matches[i].index, e = i < matches.length - 1 ? matches[i + 1].index : text.length; r.push({ number: i + 1, title: matches[i].title, content: text.slice(s, e).trim() }); } return r;
 }
 
-// ─── System Prompt ─────────────────────────────────────────────────────
-function buildSystemPrompt(meta) {
-  return `你是一位资深的影视剧本改编专家，擅长将小说文本改编为标准化的剧本格式。
+// ─── DeepSeek API call (streaming) ──────────────────────────────────────
+async function deepseekStream(systemPrompt, userMessage, maxTokens, temp, res) {
+  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+  const send = (ev, d) => res.write(`event: ${ev}\ndata: ${JSON.stringify(d)}\n\n`);
+  try {
+    const r = await fetch(API_BASE + "/v1/chat/completions", {
+      method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+      body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }], max_tokens: maxTokens, temperature: temp, stream: true })
+    });
+    if (!r.ok) { const e = await r.text(); send("error", { message: "API 错误 " + r.status + ": " + e.slice(0, 200) }); send("done", {}); res.end(); return; }
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "";
+    while (true) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop(); for (const l of lines) { if (!l.startsWith("data: ")) continue; if (l === "data: [DONE]") continue; try { const j = JSON.parse(l.slice(6)); const c = j.choices?.[0]?.delta?.content; if (c) { full += c; send("chunk", { text: c }); } } catch (_) {} } }
+    return full;
+  } catch (e) { send("error", { message: e.message }); send("done", {}); res.end(); return null; }
+}
 
-## 你的任务
-根据用户提供的小说文本，将其改编成结构化的 YAML 剧本。你必须严格遵循下述 Schema 格式输出，不得遗漏任何必填字段。
+// ─── Prompts ────────────────────────────────────────────────────────────
+function buildScriptPrompt(meta) {
+  return `你是一位资深的影视剧本改编专家。将小说文本改编为 YAML 剧本。只输出 YAML，不要任何解释。
 
-## 改编原则
-1. **忠实原著**：保留原著的核心情节、人物性格和重要对话。
-2. **剧本化处理**：将小说的内心独白转为潜台词(subtext)或画外音(voiceover)；将环境描写转为场景描述和动作节拍。
-3. **节奏把控**：合理分配场景长度，重要情节给足篇幅，过渡情节适度精简。
-4. **对话提炼**：从小说叙述中提取和优化对话，使之更符合口语表达。
-5. **潜台词挖掘**：分析角色表面话语下的真实意图，填入 subtext 字段。
-6. **情绪标注**：为每句对话标注 emotion，帮助演员理解表演方向。
-
-## 输出格式要求
-你必须输出一个完整的 YAML 文档，结构如下：
-
+输出格式：
 \`\`\`yaml
 script:
   meta:
     title: "${meta.title || "未命名剧本"}"
     format: "${meta.format || "tv_series"}"
-    original_novel: "${meta.originalNovel || ""}"
-    original_author: "${meta.originalAuthor || ""}"
-    script_author: "AI 改编助手"
-    version: "1.0-draft"
-    created_date: "${new Date().toISOString().split("T")[0]}"
-    genre: []
-    logline: ""
-    synopsis: ""
-
   characters:
-    - id: ""
-      name: ""
-      role: ""
-      age: ""
-      gender: ""
-      occupation: ""
+    - id: "中文名"
+      name: "中文名"
+      role: "protagonist"
       description: ""
-      personality: []
-      motivation: ""
-      arc: ""
-      backstory: ""
-      relationships:
-        - target: ""
-          type: ""
-          description: ""
-
-  structure:
-    model: "three_act"
-    act_count: 3
-    acts:
-      - act_number: 1
-        title: "建置"
-        summary: ""
-        scene_range: [1, 0]
-      - act_number: 2
-        title: "对抗"
-        summary: ""
-        scene_range: [0, 0]
-      - act_number: 3
-        title: "解决"
-        summary: ""
-        scene_range: [0, 0]
-
   scenes:
     - scene_number: 1
-      act: 1
       chapter_ref: 1
-      location:
-        name: ""
-        type: "INT"
-        description: ""
-        props: []
-      time: ""
-      time_of_day: "evening"
-      summary: ""
-      mood: ""
-      characters_present:
-        - id: ""
-          status: "present"
+      location: {name: "", type: "INT", description: ""}
+      time: ""; time_of_day: "evening"; summary: ""; mood: ""
+      characters_present: [{id: "", status: "present"}]
       beats:
-        - type: "action"
-          description: ""
-          characters: []
-          camera: ""
-        - type: "dialogue"
-          character: ""
-          delivery: "normal"
-          emotion: ""
-          text: ""
-          parenthetical: ""
-          target: ""
-          subtext: ""
-        - type: "transition"
-          value: "CUT TO"
+        - {type: "action", description: "", characters: []}
+        - {type: "dialogue", character: "", emotion: "", text: "", subtext: ""}
+        - {type: "transition", value: "CUT TO"}
       conflict_level: "medium"
-      emotional_shift: ""
-      key_dialogue: ""
-      notes: ""
+\`\`\`
 
-## 重要注意事项
-1. 只输出 YAML 内容，不要输出任何解释、前言或总结文字。
-2. YAML 输出必须语法正确，缩进使用 2 个空格。
-3. 多行字符串使用 YAML 的 \`|\` 或 \`>\` 语法。
-4. 角色 ID 和 name 字段统一使用中文名，保持一致。同一角色在所有场景中使用完全相同的名称。
-5. 每个场景至少包含 2 个 beats。
-6. 对话的 text 字段必须直接引用或改写自原文。
-7. 你改编的场景数量不少于输入章节数 × 2。
-8. 如果没有明确的幕结构信息，合理推断三幕结构。
-9. 时间、地点信息从原文提取，无法确定的标注为合理推测。
-10. conflict_level 和 emotional_shift 基于场景内容合理判断。`;
+规则：角色ID和name统一用中文名。每章至少2-3个场景。YAML 缩进2空格。`;
 }
 
-// ─── Robust YAML parser ────────────────────────────────────────────────
-function robustParseScript(yamlText) {
-  let content = yamlText;
-  const m = content.match(/```(?:yaml)?\s*\n([\s\S]*?)\n```/);
-  if (m) content = m[1];
-  const sm = content.match(/(?:^|\n)(script:[\s\S]*)/);
-  if (sm) content = sm[1];
-  let parsed = yaml.load(content);
-  if (!parsed) throw new Error("YAML 为空");
-  if (!parsed.script) {
-    if (parsed.scenes || parsed.characters || parsed.meta) parsed = { script: parsed };
-    else throw new Error("缺少 script 根节点");
-  }
-  if (!parsed.script.scenes || !Array.isArray(parsed.script.scenes)) throw new Error("script.scenes 不存在或不是数组");
-  return parsed.script;
-}
+// ─── Router ─────────────────────────────────────────────────────────────
+exports.handler = async function (event, context) {
+  const path = event.path.replace("/.netlify/functions/api", "").replace("/api", "") || "/";
+  const method = event.httpMethod;
 
-// ─── Helper for SSE ────────────────────────────────────────────────────
-function sseSend(res) {
-  return (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-// ─── Health ────────────────────────────────────────────────────────────
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", provider: API_BASE_URL, model: AI_MODEL, hasKey: !!API_KEY, timestamp: new Date().toISOString() });
-});
-
-// ─── Convert (SSE) ─────────────────────────────────────────────────────
-app.post("/api/convert", async (req, res) => {
-  const { text, meta } = req.body;
-  if (!text || typeof text !== "string" || text.trim().length < 500) {
-    return res.status(400).json({ error: "请提供至少 500 字的小说文本。" });
-  }
-  if (!client) return res.status(500).json({ error: "API Key 未配置" });
-
-  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
-  const send = sseSend(res);
-
-  try {
-    send("progress", { phase: "detect", message: "正在检测章节结构..." });
-    const chapterMatches = detectChapters(text);
-    const chapters = splitChapters(text, chapterMatches);
-    send("progress", { phase: "detect", message: `检测到 ${chapters.length} 个章节`, chapters: chapters.map((c) => ({ number: c.number, title: c.title })) });
-
-    send("progress", { phase: "ai", message: `AI (${AI_MODEL}) 正在分析文本并改编剧本...` });
-    const systemPrompt = buildSystemPrompt(meta || {});
-    const chapterOutline = chapters.map((c) => `### ${c.title}\n${c.content.slice(0, 500)}...（共 ${c.content.length} 字）`).join("\n\n");
-    let userMessage = `以下是一部小说的 ${chapters.length} 个章节。请将其改编为剧本 YAML。\n\n${chapterOutline}\n\n请根据上述全部文本内容，生成完整的剧本 YAML。`;
-
-    if (userMessage.length > 200000) {
-      send("progress", { phase: "ai", message: "文本较长，智能压缩中..." });
-      const compressedChapters = chapters.map((c) => `### ${c.title}\n${c.content.slice(0, 2000)}\n\n...（中间省略）...\n\n${c.content.slice(-2000)}`);
-      userMessage = `以下是一部小说的 ${chapters.length} 个章节。请将其改编为剧本 YAML。\n\n${compressedChapters.join("\n\n")}\n\n请根据上述全部文本内容，生成完整的剧本 YAML。`;
-    }
-
-    const stream = await client.chat.completions.create({
-      model: AI_MODEL, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }],
-      max_tokens: 8192, temperature: 0.4, stream: true,
-    });
-
-    let fullResponse = "";
-    for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) { fullResponse += content; send("chunk", { text: content }); }
-    }
-
-    send("progress", { phase: "parse", message: "正在解析和验证 YAML..." });
-    let yamlContent = fullResponse;
-    const yamlMatch = fullResponse.match(/```(?:yaml)?\s*\n([\s\S]*?)\n```/);
-    if (yamlMatch) yamlContent = yamlMatch[1];
-    else { const sm = fullResponse.match(/(?:^|\n)(script:[\s\S]*)/); if (sm) yamlContent = sm[1]; }
-
-    let parsed;
-    try {
-      parsed = yaml.load(yamlContent);
-      if (!parsed) throw new Error("YAML 为空");
-      if (!parsed.script) { if (parsed.scenes || parsed.characters) parsed = { script: parsed }; else throw new Error("缺少 script 根节点"); }
-    } catch (parseErr) {
-      send("warning", { message: "YAML 解析警告：" + parseErr.message });
-      parsed = null;
-    }
-
-    send("complete", { yaml: yamlContent, parsed: !!parsed, stats: { chapterCount: chapters.length, sceneCount: parsed?.script?.scenes?.length || "未知", characterCount: parsed?.script?.characters?.length || "未知", yamlLength: yamlContent.length } });
-    send("done", {});
-  } catch (err) {
-    console.error("[转换错误]", err);
-    send("error", { message: err.message });
-    send("done", {});
-  } finally { res.end(); }
-});
-
-// ─── Analyze ───────────────────────────────────────────────────────────
-app.post("/api/analyze", async (req, res) => {
-  const { text } = req.body;
-  if (!text || text.trim().length < 500) return res.status(400).json({ error: "请提供至少 500 字的小说文本。" });
-  if (!client) return res.status(500).json({ error: "API Key 未配置" });
-
-  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
-  const send = sseSend(res);
-
-  try {
-    const chapters = splitChapters(text, detectChapters(text));
-    const previewText = chapters.map((c) => `### ${c.title}\n${c.content.slice(0, 2000)}${c.content.length > 2000 ? "\n...（已截断）" : ""}`).join("\n\n");
-
-    const systemPrompt = `你是一位专业的小说分析专家。你的任务是从小说文本中提取三类信息，并以 JSON 格式输出。你必须只输出一个 JSON 对象，不要输出任何解释文字：{"characters":[{"id":"中文名","name":"中文名","role":"protagonist|antagonist|supporting|minor","description":"一句话描述","traits":["性格标签"],"first_appearance":"第X章"}],"locations":[{"name":"地点名称","type":"INT|EXT","description":"环境描述","scenes":["相关情节"]}],"conflicts":[{"type":"character_vs_character|character_vs_self|character_vs_society|character_vs_fate","description":"冲突描述","involved_characters":["角色名"],"intensity":"low|medium|high|climax","chapter_range":"第X章-第Y章"}]}`;
-
-    const stream = await client.chat.completions.create({
-      model: AI_MODEL, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: `请分析以下小说的剧情要素：\n\n${previewText}` }],
-      max_tokens: 8192, temperature: 0.3, stream: true,
-    });
-
-    let fullResponse = "";
-    for await (const chunk of stream) { const content = chunk.choices?.[0]?.delta?.content; if (content) { fullResponse += content; send("chunk", { text: content }); } }
-
-    let analysis = null;
-    try { const jsonMatch = fullResponse.match(/\{[\s\S]*\}/); if (jsonMatch) analysis = JSON.parse(jsonMatch[0]); } catch (_) {}
-
-    send("complete", { analysis, parsed: !!analysis, stats: { chapters: chapters.length, characters: analysis?.characters?.length || 0, locations: analysis?.locations?.length || 0, conflicts: analysis?.conflicts?.length || 0, sourceLength: text.length } });
-    send("done", {});
-  } catch (err) { send("error", { message: err.message }); send("done", {}); }
-  finally { res.end(); }
-});
-
-// ─── Optimize Dialogues ────────────────────────────────────────────────
-app.post("/api/optimize-dialogues", async (req, res) => {
-  const { yaml: yamlContent } = req.body;
-  if (!yamlContent || yamlContent.trim().length < 100) return res.status(400).json({ error: "请提供有效的剧本 YAML 内容。" });
-  if (!client) return res.status(500).json({ error: "API Key 未配置" });
-
-  let script;
-  try { script = robustParseScript(yamlContent); } catch (e) { return res.status(400).json({ error: "YAML 解析失败：" + e.message }); }
-
-  const charNameMap = {};
-  if (script.characters) { for (const c of script.characters) { if (c.id && c.name) charNameMap[c.id] = c.name; if (c.name) charNameMap[c.name] = c.name; } }
-  function resolveCharName(id) { if (!id) return "未知角色"; if (/[一-鿿]/.test(id)) return id; return charNameMap[id] || id; }
-
-  const allDialogues = [];
-  for (const scene of script.scenes) {
-    for (const beat of scene.beats || []) {
-      if (beat.type === "dialogue" && beat.text) {
-        allDialogues.push({ scene_number: scene.scene_number, character: resolveCharName(beat.character || "未知角色"), original_text: beat.text, emotion: beat.emotion || "", subtext: beat.subtext || "" });
-      }
-    }
-  }
-  if (allDialogues.length === 0) return res.status(400).json({ error: "剧本中未找到任何对话。" });
-
-  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
-  const send = sseSend(res);
-
-  try {
-    const dialogueList = allDialogues.map((d, i) => `[${i}] 角色:${d.character} | 情绪:${d.emotion} | 原文:"${d.original_text}" | 潜台词:${d.subtext}`).join("\n");
-    const systemPrompt = `你是一位资深的影视对白编辑。优化剧本对话，使其更生动自然。输出 JSON：{"dialogues":[{"index":0,"character":"角色名","original":"原始对白","optimized":"优化后对白","improvement":"优化说明"}]}。角色名称必须与原剧本中文名完全一致。`;
-
-    const stream = await client.chat.completions.create({
-      model: AI_MODEL, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: `优化以下剧本对话：\n\n${dialogueList.slice(0, 8000)}` }],
-      max_tokens: 8192, temperature: 0.5, stream: true,
-    });
-
-    let fullResponse = "";
-    for await (const chunk of stream) { const content = chunk.choices?.[0]?.delta?.content; if (content) { fullResponse += content; send("chunk", { text: content }); } }
-
-    let result = null;
-    try { const jsonMatch = fullResponse.match(/\{[\s\S]*\}/); if (jsonMatch) result = JSON.parse(jsonMatch[0]); } catch (_) {}
-    send("complete", { dialogues: result?.dialogues || [], summary: result?.summary || "", total_count: allDialogues.length, optimized_count: result?.dialogues?.length || 0 });
-    send("done", {});
-  } catch (err) { send("error", { message: err.message }); send("done", {}); }
-  finally { res.end(); }
-});
-
-// ─── Analyze Emotions ──────────────────────────────────────────────────
-app.post("/api/analyze-emotions", async (req, res) => {
-  const { yaml: yamlContent } = req.body;
-  if (!yamlContent || yamlContent.trim().length < 100) return res.status(400).json({ error: "请提供有效的剧本 YAML 内容。" });
-  if (!client) return res.status(500).json({ error: "API Key 未配置" });
-
-  let script;
-  try { script = robustParseScript(yamlContent); } catch (e) { return res.status(400).json({ error: "YAML 解析失败：" + e.message }); }
-
-  const emoCharNameMap = {};
-  if (script.characters) { for (const c of script.characters) { if (c.id && c.name) emoCharNameMap[c.id] = c.name; if (c.name) emoCharNameMap[c.name] = c.name; } }
-  function emoResolveName(id) { if (!id) return "未知角色"; if (/[一-鿿]/.test(id)) return id; return emoCharNameMap[id] || id; }
-
-  const sceneEmotions = [];
-  for (const scene of script.scenes) {
-    const charEmotions = {};
-    for (const beat of scene.beats || []) { if (beat.type === "dialogue" && beat.character) { charEmotions[emoResolveName(beat.character)] = beat.emotion || "未标注"; } }
-    sceneEmotions.push({ scene_number: scene.scene_number, location: scene.location?.name || "未知", mood: scene.mood || "", character_emotions: charEmotions, emotional_shift: scene.emotional_shift || "" });
+  // Health
+  if (path === "/health" || path === "/api/health") {
+    return { statusCode: 200, body: JSON.stringify({ status: "ok", model: AI_MODEL, hasKey: !!API_KEY, ts: new Date().toISOString() }) };
   }
 
-  res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
-  const send = sseSend(res);
+  // Static fallback
+  if (method === "GET") {
+    try { const fs = require("fs"); const p = require("path"); const fp = p.join(__dirname, "../../public", path === "/" ? "index.html" : path); if (fs.existsSync(fp)) return { statusCode: 200, headers: { "Content-Type": fp.endsWith(".html") ? "text/html" : "application/octet-stream" }, body: fs.readFileSync(fp, "utf-8") }; } catch (_) {}
+    try { const fs = require("fs"); const p = require("path"); const fp = p.join(__dirname, "../../public/index.html"); if (fs.existsSync(fp)) return { statusCode: 200, headers: { "Content-Type": "text/html" }, body: fs.readFileSync(fp, "utf-8") }; } catch (_) {}
+    return { statusCode: 200, body: "Novel2Script AI" };
+  }
 
-  try {
-    const sceneSummary = sceneEmotions.map((s) => { const ce = Object.entries(s.character_emotions).map(([c, e]) => `${c}:${e}`).join(", "); return `场景${s.scene_number} [${s.location}] 氛围:${s.mood} | 角色情绪: ${ce} | 情绪变化:${s.emotional_shift}`; }).join("\n");
+  if (!API_KEY) return { statusCode: 500, body: JSON.stringify({ error: "API Key 未配置" }) };
 
-    const systemPrompt = `你是影视表演指导专家。分析剧本情绪，输出 JSON：{"emotions":{"角色名":{"scene_1":"情绪"}},"emotion_arcs":{"角色名":{"arc_description":"","key_moments":[]}},"performance_notes":{"角色名":""},"overall_tone":""}。角色名称必须使用原剧本中文名。`;
+  let body = {};
+  try { body = JSON.parse(event.body || "{}"); } catch (_) { }
 
-    const stream = await client.chat.completions.create({
-      model: AI_MODEL, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: `分析以下剧本情绪：\n\n${sceneSummary.slice(0, 6000)}` }],
-      max_tokens: 8192, temperature: 0.4, stream: true,
+  // ─── /api/convert ──────────────────────────────────────────────────
+  if ((path === "/convert" || path === "/api/convert") && method === "POST") {
+    const text = body.text || "";
+    if (text.trim().length < 500) return { statusCode: 400, body: JSON.stringify({ error: "请提供至少 500 字的小说文本。" }) };
+
+    return new Promise(async (resolve) => {
+      const res = { writeHead: () => {}, setHeader: () => {}, write: () => {}, end: () => {} };
+      let _body = ""; res.writeHead = (code, headers) => { _body += ""; };
+      res.setHeader = () => {};
+      res.write = (chunk) => { _body += chunk; };
+      res.end = (chunk) => { if (chunk) _body += chunk; resolve({ statusCode: 200, headers: { "Content-Type": "text/event-stream" }, body: _body }); };
+
+      const chs = splitChapters(text, detectChapters(text));
+      const send = (ev, d) => { res.write(`event: ${ev}\ndata: ${JSON.stringify(d)}\n\n`); };
+      send("progress", { phase: "detect", message: `检测到 ${chs.length} 个章节`, chapters: chs.map(c => ({ number: c.number, title: c.title })) });
+
+      const sp = buildScriptPrompt(body.meta || {});
+      let um = chs.map(c => `### ${c.title}\n${c.content.slice(0, 1500)}${c.content.length > 1500 ? "\n...(已截断)" : ""}`).join("\n\n");
+      um = `以下是一部小说的 ${chs.length} 个章节。请将其改编为剧本 YAML：\n\n${um}`;
+      if (um.length > 180000) { um = chs.map(c => `### ${c.title}\n${c.content.slice(0, 800)}\n...(省略)...\n${c.content.slice(-800)}`).join("\n\n"); um = `以下是一部小说的 ${chs.length} 个章节。请将其改编为剧本 YAML：\n\n${um}`; }
+
+      send("progress", { phase: "ai", message: `AI (${AI_MODEL}) 正在改编...` });
+      try {
+        const r = await fetch(API_BASE + "/v1/chat/completions", {
+          method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+          body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: sp }, { role: "user", content: um }], max_tokens: 6000, temperature: 0.4, stream: true })
+        });
+        if (!r.ok) { const e = await r.text(); send("error", { message: "API " + r.status + ": " + e.slice(0, 200) }); send("done", {}); res.end(); return; }
+        const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "";
+        while (true) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop(); for (const l of lines) { if (!l.startsWith("data: ") || l === "data: [DONE]") continue; try { const j = JSON.parse(l.slice(6)); const c = j.choices?.[0]?.delta?.content; if (c) { full += c; send("chunk", { text: c }); } } catch (_) {} } }
+        send("progress", { phase: "parse", message: "解析中..." });
+        // Count scenes and characters from YAML output
+        const sceneCount = (full.match(/\n\s*- scene_number:/g) || []).length || (full.match(/\n  - scene_number:/g) || []).length || "未知";
+        const charCount = (full.match(/\n\s*- id:\s*"?([^"\n]+)"?\s*\n\s*name:/g) || []).length || (full.match(/\n  - id:\s*"?([^"\n]+)"?\s*\n\s*name:/g) || []).length || "未知";
+        send("complete", { yaml: full, parsed: true, stats: { chapterCount: chs.length, sceneCount, characterCount: charCount, yamlLength: full.length } });
+      } catch (e) { send("error", { message: e.message }); }
+      send("done", {}); res.end();
     });
+  }
 
-    let fullResponse = "";
-    for await (const chunk of stream) { const content = chunk.choices?.[0]?.delta?.content; if (content) { fullResponse += content; send("chunk", { text: content }); } }
+  // ─── /api/analyze ──────────────────────────────────────────────────
+  if ((path === "/analyze" || path === "/api/analyze") && method === "POST") {
+    const text = body.text || "";
+    if (text.trim().length < 500) return { statusCode: 400, body: JSON.stringify({ error: "请提供至少 500 字的小说文本。" }) };
 
-    let result = null;
-    try { const jsonMatch = fullResponse.match(/\{[\s\S]*\}/); if (jsonMatch) result = JSON.parse(jsonMatch[0]); } catch (_) {}
-    send("complete", { emotions: result?.emotions || {}, emotion_arcs: result?.emotion_arcs || {}, performance_notes: result?.performance_notes || {}, overall_tone: result?.overall_tone || "" });
-    send("done", {});
-  } catch (err) { send("error", { message: err.message }); send("done", {}); }
-  finally { res.end(); }
-});
+    return new Promise(async (resolve) => {
+      let _body = ""; const res = { write: (c) => { _body += c; }, end: (c) => { if (c) _body += c; resolve({ statusCode: 200, headers: { "Content-Type": "text/event-stream" }, body: _body }); }, writeHead: () => {}, setHeader: () => {} };
+      const send = (ev, d) => res.write(`event: ${ev}\ndata: ${JSON.stringify(d)}\n\n`);
+      const chs = splitChapters(text, detectChapters(text));
+      const pv = chs.map(c => `### ${c.title}\n${c.content.slice(0, 1500)}`).join("\n\n");
+      const sp = `你是小说分析专家。只输出JSON：{"characters":[{"id":"中文名","name":"中文名","role":"protagonist|antagonist|supporting|minor","description":"","traits":[],"first_appearance":""}],"locations":[{"name":"","type":"INT|EXT","description":""}],"conflicts":[{"type":"","description":"","involved_characters":[],"intensity":"low|medium|high|climax","chapter_range":""}]}`;
+      try {
+        send("progress", { phase: "ai", message: "AI 分析中..." });
+        const r = await fetch(API_BASE + "/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY }, body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: sp }, { role: "user", content: "分析以下小说：" + pv.slice(0, 8000) }], max_tokens: 4000, temperature: 0.3, stream: true }) });
+        if (!r.ok) { send("error", { message: "API " + r.status }); send("done", {}); res.end(); return; }
+        const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "";
+        while (true) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop(); for (const l of lines) { if (!l.startsWith("data: ") || l === "data: [DONE]") continue; try { const j = JSON.parse(l.slice(6)); const c = j.choices?.[0]?.delta?.content; if (c) { full += c; send("chunk", { text: c }); } } catch (_) {} } }
+        let analysis = null; try { const m = full.match(/\{[\s\S]*\}/); if (m) analysis = JSON.parse(m[0]); } catch (_) {}
+        send("complete", { analysis, parsed: !!analysis, stats: { chapters: chs.length, characters: analysis?.characters?.length || 0, locations: analysis?.locations?.length || 0, conflicts: analysis?.conflicts?.length || 0 } });
+      } catch (e) { send("error", { message: e.message }); }
+      send("done", {}); res.end();
+    });
+  }
 
-// ─── Static files ──────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, "../../public")));
-app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "../../public/index.html")));
+  // ─── /api/optimize-dialogues ───────────────────────────────────────
+  if ((path === "/optimize-dialogues" || path === "/api/optimize-dialogues") && method === "POST") {
+    const yt = body.yaml || "";
+    if (yt.trim().length < 100) return { statusCode: 400, body: JSON.stringify({ error: "请提供 YAML 内容" }) };
 
-module.exports.handler = serverless(app);
+    // Extract dialogues from YAML text with simple regex
+    const dials = [];
+    const sceneBlocks = yt.split(/\n\s*- scene_number:/);
+    let sn = 0;
+    for (const block of sceneBlocks) { sn++; const dm = block.matchAll(/\n\s*character:\s*"?([^"\n]+)"?[\s\S]*?\n\s*text:\s*"([^"]+)"/g); for (const m of dm) { dials.push({ scene_number: sn, character: m[1].trim(), original_text: m[2] }); } }
+
+    if (dials.length === 0) return { statusCode: 400, body: JSON.stringify({ error: "未找到对话" }) };
+
+    return new Promise(async (resolve) => {
+      let _body = ""; const res = { write: (c) => { _body += c; }, end: (c) => { if (c) _body += c; resolve({ statusCode: 200, headers: { "Content-Type": "text/event-stream" }, body: _body }); }, writeHead: () => {}, setHeader: () => {} };
+      const send = (ev, d) => res.write(`event: ${ev}\ndata: ${JSON.stringify(d)}\n\n`);
+      send("progress", { phase: "extract", message: `提取到 ${dials.length} 句对话` });
+      const dl = dials.map((d, i) => `[${i}] ${d.character}: "${d.original_text}"`).join("\n");
+      try {
+        const sp = "你是影视对白编辑。优化对话。输出JSON：{\"dialogues\":[{\"index\":0,\"character\":\"角色名\",\"original\":\"原对白\",\"optimized\":\"优化后\",\"improvement\":\"说明\"}]}。角色名必须用中文。";
+        const r = await fetch(API_BASE + "/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY }, body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: sp }, { role: "user", content: "优化：" + dl.slice(0, 6000) }], max_tokens: 4000, temperature: 0.5, stream: true }) });
+        if (!r.ok) { send("error", { message: "API " + r.status }); send("done", {}); res.end(); return; }
+        const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "";
+        while (true) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop(); for (const l of lines) { if (!l.startsWith("data: ") || l === "data: [DONE]") continue; try { const j = JSON.parse(l.slice(6)); const c = j.choices?.[0]?.delta?.content; if (c) { full += c; send("chunk", { text: c }); } } catch (_) {} } }
+        let result = null; try { const m = full.match(/\{[\s\S]*\}/); if (m) result = JSON.parse(m[0]); } catch (_) {}
+        send("complete", { dialogues: result?.dialogues || [], summary: result?.summary || "", total_count: dials.length, optimized_count: result?.dialogues?.length || 0 });
+      } catch (e) { send("error", { message: e.message }); }
+      send("done", {}); res.end();
+    });
+  }
+
+  // ─── /api/analyze-emotions ─────────────────────────────────────────
+  if ((path === "/analyze-emotions" || path === "/api/analyze-emotions") && method === "POST") {
+    const yt = body.yaml || "";
+    if (yt.trim().length < 100) return { statusCode: 400, body: JSON.stringify({ error: "请提供 YAML 内容" }) };
+
+    // Extract scene emotions
+    const scenes = [];
+    const sceneBlocks = yt.split(/\n\s*- scene_number:/);
+    let sn2 = 0;
+    for (const block of sceneBlocks) { sn2++; const locM = block.match(/location:\s*\n\s*name:\s*"?([^"\n]+)"?/); const moodM = block.match(/mood:\s*"?([^"\n]+)"?/); const emos = []; const dm2 = block.matchAll(/\n\s*character:\s*"?([^"\n]+)"?[\s\S]*?\n\s*emotion:\s*"?([^"\n]+)"?/g); for (const m of dm2) { emos.push(m[1].trim() + ":" + m[2].trim()); } scenes.push(`场景${sn2}[${locM?.[1]||"?"}] 氛围:${moodM?.[1]||""} | ${emos.join(", ")}`); }
+
+    return new Promise(async (resolve) => {
+      let _body = ""; const res = { write: (c) => { _body += c; }, end: (c) => { if (c) _body += c; resolve({ statusCode: 200, headers: { "Content-Type": "text/event-stream" }, body: _body }); }, writeHead: () => {}, setHeader: () => {} };
+      const send = (ev, d) => res.write(`event: ${ev}\ndata: ${JSON.stringify(d)}\n\n`);
+      send("progress", { phase: "analyze", message: `分析 ${scenes.length} 个场景` });
+      try {
+        const sp = "你是表演指导。分析情绪。输出JSON：{\"emotions\":{\"角色名\":{\"scene_1\":\"情绪\"}},\"emotion_arcs\":{\"角色名\":{\"arc_description\":\"\",\"key_moments\":[]}},\"performance_notes\":{\"角色名\":\"\"},\"overall_tone\":\"\"}。角色名必须用中文。";
+        const r = await fetch(API_BASE + "/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY }, body: JSON.stringify({ model: AI_MODEL, messages: [{ role: "system", content: sp }, { role: "user", content: "分析情绪：" + scenes.join("\n").slice(0, 5000) }], max_tokens: 4000, temperature: 0.4, stream: true }) });
+        if (!r.ok) { send("error", { message: "API " + r.status }); send("done", {}); res.end(); return; }
+        const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", full = "";
+        while (true) { const { done, value } = await reader.read(); if (done) break; buf += dec.decode(value, { stream: true }); const lines = buf.split("\n"); buf = lines.pop(); for (const l of lines) { if (!l.startsWith("data: ") || l === "data: [DONE]") continue; try { const j = JSON.parse(l.slice(6)); const c = j.choices?.[0]?.delta?.content; if (c) { full += c; send("chunk", { text: c }); } } catch (_) {} } }
+        let result = null; try { const m = full.match(/\{[\s\S]*\}/); if (m) result = JSON.parse(m[0]); } catch (_) {}
+        send("complete", { emotions: result?.emotions || {}, emotion_arcs: result?.emotion_arcs || {}, performance_notes: result?.performance_notes || {}, overall_tone: result?.overall_tone || "" });
+      } catch (e) { send("error", { message: e.message }); }
+      send("done", {}); res.end();
+    });
+  }
+
+  return { statusCode: 404, body: JSON.stringify({ error: "Not found" }) };
+};
